@@ -1,67 +1,84 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
-st.set_page_config(page_title="GenAI User Story Generator")
+# ----------------------------------
+# Page Config
+# ----------------------------------
+st.set_page_config(page_title="GenAI User Story Generator", page_icon="🧠")
 st.title("🧠 GenAI-Powered User Story Generator")
-st.write("Paste your raw requirement below and generate structured Agile user stories.")
+st.write("Convert raw requirements into structured Agile User Stories using Gemini.")
 
-# -------------------------
-# Configure Gemini
-# -------------------------
+# ----------------------------------
+# Configure Gemini Client
+# ----------------------------------
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    client = genai.Client(api_key=api_key)
 except Exception as e:
-    st.error("Gemini configuration failed.")
-    st.write(str(e))
+    st.error("🚨 Gemini configuration failed.")
+    st.exception(e)
     st.stop()
 
-# -------------------------
-# Text Input
-# -------------------------
-requirement_text = st.text_area("Enter Raw Requirement", height=200)
+# ----------------------------------
+# User Input
+# ----------------------------------
+requirement_text = st.text_area("Enter Raw Requirement", height=250)
 
-# -------------------------
+story_count = st.selectbox(
+    "Number of User Stories to Generate",
+    [1, 2, 3, 4, 5],
+    index=1
+)
+
+# ----------------------------------
 # Generate Stories
-# -------------------------
+# ----------------------------------
 if st.button("Generate User Stories"):
 
     if not requirement_text.strip():
         st.warning("Please enter a requirement.")
-    else:
-        prompt = f"""
-        You are an expert Agile Business Analyst.
+        st.stop()
 
-        Convert the following requirement into well-structured Agile User Stories.
+    prompt = f"""
+You are a highly experienced Agile Business Analyst.
 
-        Format:
+Convert the following requirement into EXACTLY {story_count} well-structured Agile User Stories.
 
-        ### User Story
-        As a <role>
-        I want <functionality>
-        So that <business value>
+For EACH story use this format:
 
-        ### Acceptance Criteria
-        - Point 1
-        - Point 2
-        - Edge cases
+### User Story
+As a <role>
+I want <functionality>
+So that <business value>
 
-        Also add:
-        - Clarifications Needed (if any)
+### Acceptance Criteria
+- Functional requirement points
+- Validation rules
+- Edge cases
+- Error handling scenarios
 
-        Requirement:
-        {requirement_text}
-        """
+### Clarifications Needed
+- Any missing business rules
+- Any assumptions made
 
-        try:
-            with st.spinner("Generating user stories using GenAI..."):
-                response = model.generate_content(prompt)
+Make output clean, professional, and hackathon-demo ready.
 
-            st.subheader("📋 Generated User Stories")
-            st.markdown(response.text)
+Requirement:
+{requirement_text}
+"""
 
-        except Exception as e:
-            st.error("Error from Gemini:")
-            st.write(str(e))
+    try:
+        with st.spinner("Generating user stories using Gemini..."):
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
 
+        st.success("✅ User Stories Generated Successfully!")
+
+        st.subheader("📋 Generated User Stories")
+        st.markdown(response.text)
+
+    except Exception as e:
+        st.error("🚨 Error from Gemini API")
+        st.exception(e)
