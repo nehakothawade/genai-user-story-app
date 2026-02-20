@@ -1,37 +1,31 @@
 import streamlit as st
-from google import genai
+from groq import Groq
 
 # ----------------------------------
-# Page Config
+# Page Setup
 # ----------------------------------
-st.set_page_config(page_title="GenAI User Story Generator", page_icon="🧠")
-st.title("🧠 GenAI-Powered User Story Generator")
-st.write("Convert raw requirements into structured Agile User Stories using Gemini.")
+st.set_page_config(page_title="Groq GenAI User Story Generator", page_icon="🚀")
+st.title("🚀 Groq-Powered User Story Generator")
+st.write("Generate Agile user stories using LLaMA 3 via Groq (Free Tier).")
 
 # ----------------------------------
-# Configure Gemini Client
+# Configure Groq
 # ----------------------------------
 try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    client = genai.Client(api_key=api_key)
+    api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=api_key)
 except Exception as e:
-    st.error("🚨 Gemini configuration failed.")
+    st.error("Groq configuration failed.")
     st.exception(e)
     st.stop()
 
 # ----------------------------------
-# User Input
+# Input
 # ----------------------------------
 requirement_text = st.text_area("Enter Raw Requirement", height=250)
 
-story_count = st.selectbox(
-    "Number of User Stories to Generate",
-    [1, 2, 3, 4, 5],
-    index=1
-)
-
 # ----------------------------------
-# Generate Stories
+# Generate
 # ----------------------------------
 if st.button("Generate User Stories"):
 
@@ -40,11 +34,11 @@ if st.button("Generate User Stories"):
         st.stop()
 
     prompt = f"""
-You are a highly experienced Agile Business Analyst.
+You are an expert Agile Business Analyst.
 
-Convert the following requirement into EXACTLY {story_count} well-structured Agile User Stories.
+Convert the following requirement into structured Agile User Stories.
 
-For EACH story use this format:
+Format:
 
 ### User Story
 As a <role>
@@ -52,33 +46,31 @@ I want <functionality>
 So that <business value>
 
 ### Acceptance Criteria
-- Functional requirement points
+- Functional requirement
 - Validation rules
 - Edge cases
-- Error handling scenarios
 
 ### Clarifications Needed
-- Any missing business rules
-- Any assumptions made
-
-Make output clean, professional, and hackathon-demo ready.
 
 Requirement:
 {requirement_text}
 """
 
     try:
-        with st.spinner("Generating user stories using Gemini..."):
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt
+        with st.spinner("Generating with Groq LLaMA 3..."):
+            response = client.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
             )
 
-        st.success("✅ User Stories Generated Successfully!")
+        output = response.choices[0].message.content
 
-        st.subheader("📋 Generated User Stories")
-        st.markdown(response.text)
+        st.success("User Stories Generated Successfully!")
+        st.markdown(output)
 
     except Exception as e:
-        st.error("🚨 Error from Gemini API")
+        st.error("Error from Groq API")
         st.exception(e)
