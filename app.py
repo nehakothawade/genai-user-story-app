@@ -4,9 +4,9 @@ from groq import Groq
 # ----------------------------------
 # Page Setup
 # ----------------------------------
-st.set_page_config(page_title="Groq GenAI User Story Generator", page_icon="🚀")
-st.title("🚀 Groq-Powered User Story Generator")
-st.write("Generate Agile user stories using LLaMA 3 via Groq (Free Tier).")
+st.set_page_config(page_title="GenAI User Story Generator", page_icon="🚀")
+st.title("🚀User Story Generator")
+st.write("Generate Agile user stories")
 
 # ----------------------------------
 # Configure Groq
@@ -74,4 +74,5 @@ Requirement:
     except Exception as e:
         st.error("Error from Groq API")
         st.exception(e)
+
 
