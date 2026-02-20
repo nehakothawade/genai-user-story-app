@@ -1,51 +1,45 @@
 import streamlit as st
-import google.generativeai as genai
-
-# Add your API key here
-genai.configure(api_key="YOUR_API_KEY")
-
-model = genai.GenerativeModel(
-    "gemini-1.5-flash",
-    generation_config={
-        "temperature": 0.2
-    }
-)
 
 st.set_page_config(page_title="GenAI User Story Generator")
-
 st.title("🧠 GenAI-Powered User Story Generator")
-st.write("Paste your raw requirement below and generate structured Agile user stories.")
+st.write("Paste your raw requirement below and generate structured Agile user stories (Demo Mode).")
 
+# Text input from user
 requirement_text = st.text_area("Enter Raw Requirement", height=200)
 
-if st.button("Generate User Stories"):
+def mock_generate_user_stories(req_text):
+    """
+    This is a mock function to simulate GenAI output.
+    Replace this with real model call when API key is available.
+    """
+    if not req_text.strip():
+        return "Please enter a requirement text to generate stories."
+    
+    # Very simple mock logic
+    stories = f"""
+**User Story 1:**  
+As a user, I want to reset my password using OTP, so that I can access my account if I forget my password.  
+**Acceptance Criteria:**  
+- OTP is sent immediately when requested  
+- Works on both mobile and web  
+- Edge case: Multiple OTP requests should not cause conflicts  
 
-    if requirement_text.strip() == "":
-        st.warning("Please enter requirement text.")
-    else:
+**Clarifications Needed:**  
+- Maximum OTP expiry time?  
+- Should we lock account after multiple failed OTP attempts?
 
-        with st.spinner("Generating high-quality user stories..."):
-
-            prompt = f"""
-You are a senior Agile Business Analyst.
-
-Convert the requirement below into high-quality user stories.
-
-Requirement:
-{requirement_text}
-
-Instructions:
-- Must follow format: As a [user], I want [goal], so that [benefit].
-- Keep stories atomic.
-- Provide measurable acceptance criteria.
-- Identify missing or ambiguous information.
-- Ask clarification questions.
-- Include edge cases.
-- Do NOT return JSON.
-- Format output cleanly with headings and bullet points.
+**User Story 2:**  
+As a system, I want to log OTP delivery failures, so that delayed or failed OTPs can be monitored.  
+**Acceptance Criteria:**  
+- Failures logged with timestamp  
+- Alerts sent to support team if OTP delayed  
+- Edge case: Network errors on mobile
 """
+    return stories
 
-            response = model.generate_content(prompt)
-
-            st.subheader("📋 Generated User Stories")
-            st.markdown(response.text)
+# Button to generate stories
+if st.button("Generate User Stories"):
+    with st.spinner("Generating user stories..."):
+        output = mock_generate_user_stories(requirement_text)
+        st.subheader("📋 Generated User Stories")
+        st.markdown(output)
