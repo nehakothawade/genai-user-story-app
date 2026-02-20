@@ -11,7 +11,7 @@ st.write("Paste your raw requirement below and generate structured Agile user st
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
 except Exception as e:
     st.error("Gemini configuration failed.")
     st.write(str(e))
@@ -64,3 +64,4 @@ if st.button("Generate User Stories"):
         except Exception as e:
             st.error("Error from Gemini:")
             st.write(str(e))
+
