@@ -1,67 +1,51 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-require("dotenv").config();
+import streamlit as st
+import google.generativeai as genai
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+# Add your API key here
+genai.configure(api_key="YOUR_API_KEY")
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash"
-});
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    generation_config={
+        "temperature": 0.2
+    }
+)
 
-async function generateUserStories(requirementText) {
+st.set_page_config(page_title="GenAI User Story Generator")
 
-  // Step 1: Extract structured intent
-  const analysisPrompt = `
-You are a senior business analyst.
+st.title("🧠 GenAI-Powered User Story Generator")
+st.write("Paste your raw requirement below and generate structured Agile user stories.")
 
-Analyze the following requirement and extract:
-1. Functional requirements
-2. Non-functional requirements
-3. Pain points
-4. Ambiguities
+requirement_text = st.text_area("Enter Raw Requirement", height=200)
+
+if st.button("Generate User Stories"):
+
+    if requirement_text.strip() == "":
+        st.warning("Please enter requirement text.")
+    else:
+
+        with st.spinner("Generating high-quality user stories..."):
+
+            prompt = f"""
+You are a senior Agile Business Analyst.
+
+Convert the requirement below into high-quality user stories.
 
 Requirement:
-"${requirementText}"
+{requirement_text}
 
-Respond in JSON format.
-`;
+Instructions:
+- Must follow format: As a [user], I want [goal], so that [benefit].
+- Keep stories atomic.
+- Provide measurable acceptance criteria.
+- Identify missing or ambiguous information.
+- Ask clarification questions.
+- Include edge cases.
+- Do NOT return JSON.
+- Format output cleanly with headings and bullet points.
+"""
 
-  const analysisResult = await model.generateContent(analysisPrompt);
-  const analysisText = analysisResult.response.text();
+            response = model.generate_content(prompt)
 
-  // Step 2: Convert into atomic user stories
-  const storyPrompt = `
-You are an Agile Product Owner.
-
-Using the following analysis:
-
-${analysisText}
-
-Generate structured user stories.
-
-Rules:
-- Must follow format: As a [user], I want [goal], so that [benefit]
-- Keep stories atomic
-- Include measurable acceptance criteria
-- Identify missing information
-- Ask clarification questions
-- Include edge cases
-- Return structured JSON
-
-Format:
-{
-  "userStories": [
-    {
-      "story": "",
-      "acceptanceCriteria": [],
-      "edgeCases": [],
-      "clarificationsNeeded": []
-    }
-  ]
-}
-`;
-
-  const storyResult = await model.generateContent(storyPrompt);
-  return storyResult.response.text();
-}
-
-module.exports = { generateUserStories };
+            st.subheader("📋 Generated User Stories")
+            st.markdown(response.text)
