@@ -1,90 +1,67 @@
-import streamlit as st
-import google.generativeai as genai
-from docx import Document
-from pypdf import PdfReader
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require("dotenv").config();
 
-# -------------------------
-# Page Config
-# -------------------------
-st.set_page_config(page_title="AI User Story Generator", layout="centered")
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-st.title("🚀 AI-Powered User Story Generator")
-st.write("Enter raw text or upload a PDF/Word file to generate structured Agile user stories.")
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash"
+});
 
-# -------------------------
-# Configure Gemini API
-# -------------------------
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("models/gemini-1.5-flash")
-except Exception as e:
-    st.error("Gemini API key not found or invalid. Please check Streamlit Secrets.")
-    st.stop()
+async function generateUserStories(requirementText) {
 
-# -------------------------
-# Text Input
-# -------------------------
-raw_text = st.text_area("Enter Raw Requirement", height=200)
+  // Step 1: Extract structured intent
+  const analysisPrompt = `
+You are a senior business analyst.
 
-# -------------------------
-# File Upload
-# -------------------------
-uploaded_file = st.file_uploader("Or Upload PDF/Word File", type=["pdf", "docx"])
+Analyze the following requirement and extract:
+1. Functional requirements
+2. Non-functional requirements
+3. Pain points
+4. Ambiguities
 
-file_text = ""
+Requirement:
+"${requirementText}"
 
-if uploaded_file:
-    if uploaded_file.type == "application/pdf":
-        reader = PdfReader(uploaded_file)
-        for page in reader.pages:
-            file_text += page.extract_text() or ""
+Respond in JSON format.
+`;
 
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        doc = Document(uploaded_file)
-        for para in doc.paragraphs:
-            file_text += para.text + "\n"
+  const analysisResult = await model.generateContent(analysisPrompt);
+  const analysisText = analysisResult.response.text();
 
-# -------------------------
-# Combine Input
-# -------------------------
-final_input = raw_text.strip() if raw_text.strip() else file_text.strip()
+  // Step 2: Convert into atomic user stories
+  const storyPrompt = `
+You are an Agile Product Owner.
 
-# -------------------------
-# Generate User Story
-# -------------------------
-if st.button("Generate AI User Stories"):
+Using the following analysis:
 
-    if not final_input:
-        st.error("Please enter text or upload a file.")
-    else:
-        with st.spinner("Generating user stories using Gemini AI..."):
+${analysisText}
 
-            prompt = f"""
-            You are a professional Business Analyst.
+Generate structured user stories.
 
-            Convert the following requirement into structured Agile User Stories.
+Rules:
+- Must follow format: As a [user], I want [goal], so that [benefit]
+- Keep stories atomic
+- Include measurable acceptance criteria
+- Identify missing information
+- Ask clarification questions
+- Include edge cases
+- Return structured JSON
 
-            Format strictly as:
+Format:
+{
+  "userStories": [
+    {
+      "story": "",
+      "acceptanceCriteria": [],
+      "edgeCases": [],
+      "clarificationsNeeded": []
+    }
+  ]
+}
+`;
 
-            ### User Story
-            As a <role>
-            I want <functionality>
-            So that <business value>
+  const storyResult = await model.generateContent(storyPrompt);
+  return storyResult.response.text();
+}
 
-            ### Acceptance Criteria
-            - Criteria 1
-            - Criteria 2
-            - Criteria 3
-
-            Requirement:
-            {final_input}
-            """
-
-            try:
-                response = model.generate_content(prompt)
-                st.subheader("📌 Generated User Story")
-                st.markdown(response.text)
-
-            except Exception as e:
-                st.error("Error generating content. Please check API key or model access.")
+module.exports = { generateUserStories };
