@@ -172,19 +172,20 @@ Requirement:
     return response.choices[0].message.content
 
 # ----------------------------------
-# WORD EXPORT FUNCTION
+# WORD EXPORT FUNCTION (IN MEMORY)
 # ----------------------------------
 def export_to_word(content):
     doc = Document()
     doc.add_heading("AI Generated User Stories", level=1)
     doc.add_paragraph(content)
 
-    file_name = f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-    doc.save(file_name)
-    return file_name
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 # ----------------------------------
-# BUTTONS
+# GENERATE BUTTON
 # ----------------------------------
 col1, col2 = st.columns(2)
 
@@ -243,15 +244,15 @@ Improve the following user stories to make them:
             st.rerun()
 
     # --------------------------
-    # APPROVE BUTTON
+    # APPROVE & DOWNLOAD BUTTON
     # --------------------------
     if col4.button("✅ Approve & Generate Word File"):
-        file_path = export_to_word(st.session_state.generated_story)
+        word_file = export_to_word(st.session_state.generated_story)
 
-        with open(file_path, "rb") as file:
-            st.download_button(
-                label="📄 Download Word File",
-                data=file,
-                file_name=file_path,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+        st.download_button(
+            label="📄 Download Started - Click if not automatic",
+            data=word_file,
+            file_name=f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="download_button"
+        )
