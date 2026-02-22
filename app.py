@@ -1,78 +1,208 @@
 import streamlit as st
 from groq import Groq
+from docx import Document
+from datetime import datetime
+import os
 
 # ----------------------------------
-# Page Setup
+# PAGE CONFIG
 # ----------------------------------
-st.set_page_config(page_title="GenAI User Story Generator", page_icon="🚀")
-st.title("🚀User Story Generator")
-st.write("Generate Agile user stories")
+st.set_page_config(
+    page_title="AgileGenie - AI Backlog Builder",
+    page_icon="🚀",
+    layout="wide"
+)
 
 # ----------------------------------
-# Configure Groq
+# HEADER UI
+# ----------------------------------
+st.markdown("""
+<style>
+.big-title {
+    font-size: 40px;
+    font-weight: bold;
+    color: #4B8BBE;
+}
+.subtitle {
+    font-size: 18px;
+    color: gray;
+}
+.stButton>button {
+    border-radius: 8px;
+    height: 3em;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="big-title">🚀 AgileGenie</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-Powered Agile Backlog Builder</div>', unsafe_allow_html=True)
+st.write("---")
+
+# ----------------------------------
+# GROQ API SETUP
 # ----------------------------------
 try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
-except Exception as e:
-    st.error("Groq configuration failed.")
-    st.exception(e)
+except Exception:
+    st.error("Groq API key not configured. Please set it in Streamlit secrets.")
     st.stop()
 
 # ----------------------------------
-# Input
+# SESSION STATE
 # ----------------------------------
-requirement_text = st.text_area("Enter Raw Requirement", height=250)
+if "generated_story" not in st.session_state:
+    st.session_state.generated_story = None
 
 # ----------------------------------
-# Generate
+# VALIDATION FUNCTION
 # ----------------------------------
-if st.button("Generate User Stories"):
+def validate_story(output):
+    score = 0
+    checks = {
+        "Role Defined": "As a" in output,
+        "Functionality Defined": "I want" in output,
+        "Business Value Defined": "So that" in output,
+        "Acceptance Criteria Present": "Acceptance Criteria" in output,
+    }
 
-    if not requirement_text.strip():
-        st.warning("Please enter a requirement.")
-        st.stop()
+    for value in checks.values():
+        if value:
+            score += 25
 
+    return score, checks
+
+# ----------------------------------
+# AI GENERATION FUNCTION
+# ----------------------------------
+def generate_story(requirement):
     prompt = f"""
-You are an expert Agile Business Analyst.
+You are a Senior Agile Business Analyst.
 
-Convert the following requirement into structured Agile User Stories.
+Convert the requirement into:
+- Atomic user stories
+- Follow INVEST principles
+- Add acceptance criteria
+- Include edge cases
+- Mention assumptions
+- Ask clarifications if needed
 
-Format:
+STRICT FORMAT:
 
+---
 ### User Story
 As a <role>
 I want <functionality>
 So that <business value>
 
-### Acceptance Criteria
-- Functional requirement
-- Validation rules
-- Edge cases
+Acceptance Criteria:
+1.
+2.
 
-### Clarifications Needed
+Edge Cases:
+-
+
+Assumptions:
+-
+
+Clarifications Needed:
+-
+---
 
 Requirement:
-{requirement_text}
+{requirement}
 """
 
-    try:
-        with st.spinner("Generating with Groq LLaMA 3..."):
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5,
+    )
+
+    return response.choices[0].message.content
+
+# ----------------------------------
+# WORD EXPORT FUNCTION
+# ----------------------------------
+def export_to_word(content):
+    doc = Document()
+    doc.add_heading("AI Generated User Stories", level=1)
+    doc.add_paragraph(content)
+
+    file_name = f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+    doc.save(file_name)
+    return file_name
+
+# ----------------------------------
+# INPUT
+# ----------------------------------
+requirement_text = st.text_area(
+    "📌 Enter Raw Requirement",
+    height=200,
+    placeholder="Example: The system should allow users to login using OTP..."
+)
+
+col1, col2 = st.columns(2)
+
+# ----------------------------------
+# GENERATE BUTTON
+# ----------------------------------
+if col1.button("✨ Generate User Stories"):
+    if requirement_text.strip() == "":
+        st.warning("Please enter a requirement.")
+    else:
+        with st.spinner("Generating User Stories..."):
+            st.session_state.generated_story = generate_story(requirement_text)
+
+# ----------------------------------
+# DISPLAY OUTPUT
+# ----------------------------------
+if st.session_state.generated_story:
+
+    st.success("User Stories Generated Successfully!")
+    st.markdown(st.session_state.generated_story)
+
+    # Quality Score
+    score, checks = validate_story(st.session_state.generated_story)
+
+    st.write("---")
+    st.subheader("📊 Quality Score")
+    st.progress(score / 100)
+    st.write(f"Score: {score}/100")
+
+    for key, value in checks.items():
+        st.write(f"{'✅' if value else '❌'} {key}")
+
+    col3, col4 = st.columns(2)
+
+    # ----------------------------------
+    # REGENERATE
+    # ----------------------------------
+    if col3.button("🔄 Regenerate (Improve)"):
+        with st.spinner("Improving user stories..."):
+            improved_prompt = f"""
+Improve the following user stories to make them more clear,
+detailed and testable:
+
+{st.session_state.generated_story}
+"""
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
+                messages=[{"role": "user", "content": improved_prompt}],
+                temperature=0.3,
             )
+            st.session_state.generated_story = response.choices[0].message.content
+            st.rerun()
 
-        output = response.choices[0].message.content
-
-        st.success("User Stories Generated Successfully!")
-        st.markdown(output)
-
-    except Exception as e:
-        st.error("Error from Groq API")
-        st.exception(e)
-
-
+    # ----------------------------------
+    # APPROVE
+    # ----------------------------------
+    if col4.button("✅ Approve & Generate Word File"):
+        file_path = export_to_word(st.session_state.generated_story)
+        with open(file_path, "rb") as file:
+            st.download_button(
+                label="📄 Download Word File",
+                data=file,
+                file_name=file_path,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
