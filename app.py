@@ -4,6 +4,7 @@ from docx import Document
 from PyPDF2 import PdfReader
 from datetime import datetime
 from io import BytesIO
+import base64
 
 # ----------------------------------
 # PAGE CONFIG
@@ -244,15 +245,27 @@ Improve the following user stories to make them:
             st.rerun()
 
     # --------------------------
-    # APPROVE & DOWNLOAD BUTTON
+    # APPROVE & AUTO DOWNLOAD
     # --------------------------
     if col4.button("✅ Approve & Generate Word File"):
         word_file = export_to_word(st.session_state.generated_story)
 
-        st.download_button(
-            label="📄 Download Started - Click if not automatic",
-            data=word_file,
-            file_name=f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key="download_button"
-        )
+        b64 = base64.b64encode(word_file.read()).decode()
+        file_name = f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+
+        download_html = f"""
+        <html>
+        <body>
+        <a id="download_link"
+           href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}"
+           download="{file_name}">
+        </a>
+        <script>
+            document.getElementById('download_link').click();
+        </script>
+        </body>
+        </html>
+        """
+
+        st.success("✅ Approved! Download starting...")
+        st.components.v1.html(download_html, height=0)
