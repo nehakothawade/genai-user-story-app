@@ -61,6 +61,19 @@ if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
 # ----------------------------------
+# APPLICATION CONTEXT INPUT (NEW)
+# ----------------------------------
+st.subheader("🧩 Application Context (Optional)")
+
+application_context = st.text_area(
+    "Describe the application/domain context",
+    height=120,
+    placeholder="Example: Banking mobile app used by retail customers in India. Integrated with SAP backend..."
+)
+
+st.write("---")
+
+# ----------------------------------
 # FILE UPLOAD SECTION
 # ----------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
@@ -126,9 +139,19 @@ def validate_story(output):
 # ----------------------------------
 # AI GENERATION FUNCTION
 # ----------------------------------
-def generate_story(requirement):
+def generate_story(requirement, app_context=None):
+
+    context_section = ""
+    if app_context and app_context.strip() != "":
+        context_section = f"""
+Application Context:
+{app_context}
+"""
+
     prompt = f"""
 You are a Senior Agile Business Analyst.
+
+{context_section}
 
 Convert the requirement into:
 - Atomic user stories
@@ -173,7 +196,7 @@ Requirement:
     return response.choices[0].message.content
 
 # ----------------------------------
-# WORD EXPORT FUNCTION (IN MEMORY)
+# WORD EXPORT FUNCTION
 # ----------------------------------
 def export_to_word(content):
     doc = Document()
@@ -195,7 +218,10 @@ if col1.button("✨ Generate User Stories"):
         st.warning("Please enter or upload a requirement.")
     else:
         with st.spinner("Generating AI Backlog..."):
-            st.session_state.generated_story = generate_story(requirement_text)
+            st.session_state.generated_story = generate_story(
+                requirement_text,
+                application_context
+            )
 
 # ----------------------------------
 # DISPLAY OUTPUT
@@ -205,9 +231,7 @@ if st.session_state.generated_story:
     st.success("🎉 User Stories Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
-    # --------------------------
     # QUALITY SCORE
-    # --------------------------
     score, checks = validate_story(st.session_state.generated_story)
 
     st.write("---")
@@ -222,9 +246,7 @@ if st.session_state.generated_story:
 
     col3, col4 = st.columns(2)
 
-    # --------------------------
-    # REGENERATE BUTTON
-    # --------------------------
+    # REGENERATE
     if col3.button("🔄 Regenerate (Improve Quality)"):
         with st.spinner("Improving user stories..."):
             improved_prompt = f"""
@@ -244,9 +266,7 @@ Improve the following user stories to make them:
             st.session_state.generated_story = response.choices[0].message.content
             st.rerun()
 
-    # --------------------------
-    # APPROVE & AUTO DOWNLOAD
-    # --------------------------
+    # APPROVE & DOWNLOAD
     if col4.button("✅ Approve & Generate Word File"):
         word_file = export_to_word(st.session_state.generated_story)
 
