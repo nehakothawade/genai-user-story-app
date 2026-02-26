@@ -172,12 +172,12 @@ if st.session_state.generated_story:
 
         st.info(f"🤖 Follow-up Question:\n\n{st.session_state.current_question}")
 
-        user_answer = st.text_area("Your Answer:", height=120)
+        user_answer = st.text_area("Your Answer:", height=50)
 
         col1, col2 = st.columns(2)
 
-        # Submit Answer
-        if col1.button("➤ Submit Answer"):
+     
+        if col1.button("➤ Submit Query"):
 
             if user_answer.strip() != "":
 
@@ -250,3 +250,4 @@ Do NOT rewrite the story.
             st.markdown(f"**You Answered:** {chat['answer']}")
             st.markdown(f"**AI Response:** {chat['ai_ack']}")
             st.divider()
+
