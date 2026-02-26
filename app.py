@@ -15,28 +15,28 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# CSS FIX (Hero Not Cut + Proper Width)
+# CLEAN UI CSS
 # ------------------------------------------------
 st.markdown("""
 <style>
 
-/* App Background */
+/* Background */
 [data-testid="stAppViewContainer"] {
     background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-/* Keep proper top spacing */
+/* Fix content width */
 .block-container {
     max-width: 900px;
-    padding-top: 2rem;
     margin: auto;
+    padding-top: 2rem;
 }
 
-/* Blue Hero */
+/* Blue Hero - FIXED (no top cut) */
 .hero {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
-    padding: 40px;
-    border-radius: 20px;
+    padding: 40px 20px;
+    border-radius: 15px;
     color: white;
     text-align: center;
     margin-bottom: 40px;
@@ -47,13 +47,6 @@ st.markdown("""
     border-radius: 8px;
     height: 3em;
     font-weight: 600;
-}
-
-.chat-box {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    margin-top: 20px;
 }
 
 </style>
@@ -75,11 +68,11 @@ except Exception:
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = []
 
 # ------------------------------------------------
-# HERO
+# HERO SECTION
 # ------------------------------------------------
 st.markdown("""
 <div class="hero">
@@ -89,11 +82,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# INPUT SECTION
+# APPLICATION CONTEXT
 # ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
 application_context = st.text_area("", height=100)
 
+# ------------------------------------------------
+# FILE UPLOAD
+# ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
 uploaded_file = st.file_uploader(
     "Upload .docx or .pdf file",
@@ -125,50 +121,59 @@ if uploaded_file:
 else:
     requirement_text = st.text_area(
         "📌 Enter Raw Requirement",
-        height=220
+        height=220,
+        placeholder="Example: Users should login using OTP verification..."
     )
 
 # ------------------------------------------------
-# AI FUNCTIONS
+# AI GENERATION FUNCTION
 # ------------------------------------------------
 def generate_story(requirement, context):
-    context_block = f"Application Context:\n{context}\n\n" if context.strip() else ""
+
+    context_block = ""
+    if context.strip():
+        context_block = f"Application Context:\n{context}\n\n"
 
     prompt = f"""
 You are a Senior Agile Business Analyst.
 
 {context_block}
 
-Convert the requirement into structured user stories
-with acceptance criteria, edge cases and assumptions.
+Convert the requirement into:
+- Atomic user stories
+- Acceptance Criteria
+- Edge Cases
+- Assumptions
+
+STRICT FORMAT:
+
+---
+### User Story
+As a <role>
+I want <functionality>
+So that <business value>
+
+Acceptance Criteria:
+1.
+2.
+
+Edge Cases:
+-
+
+Assumptions:
+-
+---
 
 Requirement:
 {requirement}
 """
+
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
     )
-    return response.choices[0].message.content
 
-
-def followup_response(question):
-    prompt = f"""
-You previously generated the following user story:
-
-{st.session_state.generated_story}
-
-User follow-up question:
-{question}
-
-Respond clearly and structured.
-"""
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
-    )
     return response.choices[0].message.content
 
 # ------------------------------------------------
@@ -183,38 +188,71 @@ if st.button("✨ Generate User Story"):
                 requirement_text,
                 application_context
             )
-            st.session_state.chat_history = []
+            st.session_state.conversation_history = []
+            st.rerun()
 
 # ------------------------------------------------
-# OUTPUT
+# CONVERSATIONAL REFINEMENT MODE
 # ------------------------------------------------
-if st.session_state.generated_story:
+if st.session_state.generated_story is not None:
 
     st.success("🎉 User Story Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
-    st.markdown("---")
-    st.subheader("💬 Ask Follow-up Questions")
+    st.divider()
+    st.subheader("🧠 Let's Refine Further")
 
-    user_question = st.text_input(
-        "Type your question (e.g., Explain assumptions one by one)"
+    clarification_input = st.text_area(
+        "Add clarification (Assumption, Edge Case, Workflow detail, Business rule, etc.)",
+        height=120,
+        placeholder="Example: Explain OTP expiry behavior..."
     )
 
-    if st.button("Ask"):
-        if user_question.strip() != "":
-            answer = followup_response(user_question)
-            st.session_state.chat_history.append(("You", user_question))
-            st.session_state.chat_history.append(("AI", answer))
+    col1, col2 = st.columns(2)
 
-    # Display chat
-    for role, message in st.session_state.chat_history:
-        if role == "You":
-            st.markdown(f"**🧑 You:** {message}")
-        else:
-            st.markdown(f"**🤖 AI:** {message}")
+    # Submit clarification
+    if col1.button("➤ Submit Clarification"):
 
-    # Download
-    if st.button("⬇ Download as Word"):
+        if clarification_input.strip() != "":
+
+            with st.spinner("Refining user story..."):
+
+                refinement_prompt = f"""
+You are a Senior Agile Business Analyst.
+
+Current User Story:
+{st.session_state.generated_story}
+
+User Clarification:
+{clarification_input}
+
+1. Update the user story accordingly.
+2. Improve assumptions and edge cases.
+3. Ask ONE intelligent follow-up clarification question at the end.
+
+Return updated story + follow-up question.
+"""
+
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": refinement_prompt}],
+                    temperature=0.4,
+                )
+
+                updated_story = response.choices[0].message.content
+                st.session_state.generated_story = updated_story
+
+                st.session_state.conversation_history.append({
+                    "user": clarification_input,
+                    "ai": updated_story
+                })
+
+                st.rerun()
+
+    # Finalize
+    if col2.button("✅ Finalize Story"):
+        st.success("✔ Story Finalized Successfully!")
+
         doc = Document()
         doc.add_heading("AI Generated User Story", level=1)
         doc.add_paragraph(st.session_state.generated_story)
@@ -224,8 +262,20 @@ if st.session_state.generated_story:
         buffer.seek(0)
 
         st.download_button(
-            label="Download File",
+            label="⬇ Download Final Story",
             data=buffer,
             file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
+
+    # Show refinement conversation
+    if st.session_state.conversation_history:
+
+        st.divider()
+        st.subheader("💬 Refinement Conversation")
+
+        for chat in st.session_state.conversation_history:
+            st.markdown(f"**You:** {chat['user']}")
+            st.markdown(f"**AI Response:**")
+            st.markdown(chat['ai'])
+            st.divider()
