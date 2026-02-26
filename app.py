@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# SAFE SESSION STATE INIT (IMPORTANT)
+# SAFE SESSION STATE INIT
 # ------------------------------------------------
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
@@ -22,12 +22,12 @@ if "conversation" not in st.session_state:
     st.session_state.conversation = []
 
 # ------------------------------------------------
-# GROQ CLIENT (Use Secrets in Streamlit Cloud)
+# GROQ CLIENT (Use Streamlit Secrets)
 # ------------------------------------------------
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ------------------------------------------------
-# BLUE CENTERED UI (UNCHANGED STYLE)
+# BLUE CENTERED CONTAINER (UNCHANGED)
 # ------------------------------------------------
 st.markdown("""
 <style>
@@ -43,10 +43,6 @@ st.markdown("""
 h1 {
     text-align: center;
 }
-.stTextArea textarea {
-    background-color: #1B2A60 !important;
-    color: white !important;
-}
 .stTextInput input {
     background-color: #1B2A60 !important;
     color: white !important;
@@ -59,13 +55,21 @@ st.markdown('<div class="main-container">', unsafe_allow_html=True)
 st.title("🚀 TechVortex - AI User Story Generator")
 
 # ------------------------------------------------
-# REQUIREMENT INPUT
+# PROJECT DETAILS
 # ------------------------------------------------
-st.subheader("📌 Enter Requirement")
+st.subheader("📌 Project Details")
 
-requirement_text = st.text_area("Describe your requirement")
+project_title = st.text_input("Project Title")
 
-uploaded_file = st.file_uploader("Or upload a .txt file", type=["txt"])
+requirement_text = st.text_area(
+    "Describe your requirement",
+    height=200
+)
+
+uploaded_file = st.file_uploader(
+    "Or upload a .txt file",
+    type=["txt"]
+)
 
 file_content = ""
 if uploaded_file is not None:
@@ -78,13 +82,18 @@ final_requirement = requirement_text if requirement_text else file_content
 # ------------------------------------------------
 if st.button("✨ Generate User Story"):
 
-    if not final_requirement.strip():
+    if not project_title.strip():
+        st.warning("Please enter Project Title.")
+    elif not final_requirement.strip():
         st.warning("Please enter requirement or upload file.")
     else:
-        with st.spinner("Generating..."):
+        with st.spinner("Generating user story..."):
 
             story_prompt = f"""
 You are a Senior Agile Business Analyst.
+
+Project Title:
+{project_title}
 
 Generate:
 - Title
@@ -106,7 +115,7 @@ Requirement:
             story = story_response.choices[0].message.content
             st.session_state.generated_story = story
 
-            # First clarification question
+            # First follow-up question
             followup_prompt = f"""
 User Story:
 {story}
@@ -198,7 +207,7 @@ Ask ONE clarification question at a time.
     if col2.button("⬇ Download & Finish"):
 
         doc = Document()
-        doc.add_heading("AI Generated User Story", level=1)
+        doc.add_heading(project_title, level=1)
         doc.add_paragraph(st.session_state.generated_story)
 
         buffer = BytesIO()
@@ -208,7 +217,7 @@ Ask ONE clarification question at a time.
         st.download_button(
             label="Download File",
             data=buffer,
-            file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+            file_name=f"{project_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
 
