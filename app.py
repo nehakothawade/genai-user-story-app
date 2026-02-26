@@ -2,53 +2,25 @@ import streamlit as st
 from groq import Groq
 from docx import Document
 from PyPDF2 import PdfReader
-from datetime import datetime
-from io import BytesIO
 
 # ------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------
 st.set_page_config(
-    page_title="TechVortex | AI User Story Generator",
+    page_title="TechVortex | AI User Story Chat",
     page_icon="🚀",
     layout="wide"
 )
 
 # ------------------------------------------------
-# CLEAN CSS FIX
+# CSS STYLING
 # ------------------------------------------------
 st.markdown("""
 <style>
-/* Remove Streamlit default white background */
-[data-testid="stAppViewContainer"] {
-    background: linear-gradient(135deg, #eef2f3, #dfe9f3);
-}
-
-/* REMOVE white block container */
-.block-container {
-    max-width: 900px;
-    padding-top: 0rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    margin: auto;
-}
-
-/* Blue Hero */
-.hero {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
-    padding: 35px;
-    border-radius: 0 0 20px 20px;
-    color: white;
-    text-align: center;
-    margin-bottom: 40px;
-}
-
-/* Buttons */
-.stButton>button {
-    border-radius: 8px;
-    height: 3em;
-    font-weight: 600;
-}
+[data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #eef2f3, #dfe9f3); }
+.block-container { max-width: 900px; padding: 0 1rem; margin: auto; }
+.hero { background: linear-gradient(90deg,#1e3c72,#2a5298); padding:35px; border-radius:0 0 20px 20px; color:white; text-align:center; margin-bottom:40px; }
+.stButton>button { border-radius:8px; height:3em; font-weight:600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,16 +37,20 @@ except Exception:
 # ------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------
-if "generated_story" not in st.session_state:
-    st.session_state.generated_story = None
+if "initial_story" not in st.session_state:
+    st.session_state.initial_story = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "followup_input" not in st.session_state:
+    st.session_state.followup_input = ""
 
 # ------------------------------------------------
-# HERO SECTION (BLUE HEADER KEPT)
+# HERO SECTION
 # ------------------------------------------------
 st.markdown("""
 <div class="hero">
-    <h1>🚀 TechVortex</h1>
-    <p>AI-Powered Agile User Story Generator</p>
+<h1>🚀 TechVortex</h1>
+<p>Continuous AI User Story Generator with Infinite Follow-ups</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -82,25 +58,21 @@ st.markdown("""
 # APPLICATION CONTEXT
 # ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
-application_context = st.text_area("", height=100)
+app_context = st.text_area("", height=100, placeholder="Optional context to guide AI...")
 
 # ------------------------------------------------
 # FILE UPLOAD
 # ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
-uploaded_file = st.file_uploader(
-    "Upload .docx or .pdf file",
-    type=["docx", "pdf"]
-)
+uploaded_file = st.file_uploader("Upload .docx or .pdf file", type=["docx","pdf"])
 
 def extract_text(file):
     text = ""
     if file.type == "application/pdf":
         reader = PdfReader(file)
         for page in reader.pages:
-            extracted = page.extract_text()
-            if extracted:
-                text += extracted + "\n"
+            t = page.extract_text()
+            if t: text += t + "\n"
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
         for para in doc.paragraphs:
@@ -110,110 +82,99 @@ def extract_text(file):
 if uploaded_file:
     extracted_text = extract_text(uploaded_file)
     st.success("✅ File uploaded successfully!")
-    requirement_text = st.text_area(
-        "📌 Extracted Requirement (Editable)",
-        value=extracted_text,
-        height=220
-    )
+    requirement_text = st.text_area("📌 Requirement (Editable)", value=extracted_text, height=220)
 else:
-    requirement_text = st.text_area(
-        "📌 Enter Raw Requirement",
-        height=220,
-        placeholder="Example: Users should login using OTP verification..."
-    )
+    requirement_text = st.text_area("📌 Enter Requirement", height=220, placeholder="Example: Users should login using OTP verification...")
 
 # ------------------------------------------------
-# AI FUNCTION
+# AI FUNCTIONS
 # ------------------------------------------------
-def generate_story(requirement, context):
-    context_block = ""
-    if context.strip():
-        context_block = f"Application Context:\n{context}\n\n"
+def generate_initial_story(requirement, context):
+    ctx_block = f"Application Context:\n{context}\n\n" if context.strip() else ""
     prompt = f"""
 You are a Senior Agile Business Analyst.
 
-{context_block}
+{ctx_block}
 
-Convert the requirement into:
+Convert this requirement into:
 - Atomic user stories
-- Add Acceptance Criteria
-- Include Edge Cases
-- Mention Assumptions
+- Acceptance Criteria
+- Edge Cases
+- Assumptions
 
 STRICT FORMAT:
-
----
-### User Story
-As a <role>
-I want <functionality>
-So that <business value>
-
-Acceptance Criteria:
-1.
-2.
-
-Edge Cases:
--
-
-Assumptions:
--
----
 
 Requirement:
 {requirement}
 """
-    response = client.chat.completions.create(
+    resp = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5,
+        messages=[{"role":"user","content":prompt}],
+        temperature=0.5
     )
-    return response.choices[0].message.content
+    return resp.choices[0].message.content
+
+def generate_followup(question):
+    messages = [{"role":"system","content":"You are a helpful AI Business Analyst."}]
+    if st.session_state.initial_story:
+        messages.append({"role":"assistant","content":st.session_state.initial_story})
+    for f in st.session_state.chat_history:
+        messages.append({"role":"assistant","content":f})
+    messages.append({"role":"user","content":question})
+    
+    resp = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=messages,
+        temperature=0.5
+    )
+    answer = resp.choices[0].message.content
+    st.session_state.chat_history.append(answer)
+    return answer
 
 # ------------------------------------------------
-# GENERATE BUTTON
+# INITIAL GENERATION
 # ------------------------------------------------
-if st.button("✨ Generate User Story"):
+st.subheader("✨ Generate Initial User Story")
+if st.button("Generate User Story"):
     if requirement_text.strip() == "":
-        st.warning("Please enter or upload a requirement.")
+        st.warning("Please enter a requirement.")
     else:
-        with st.spinner("Generating AI User Story..."):
-            st.session_state.generated_story = generate_story(
-                requirement_text,
-                application_context
-            )
+        with st.spinner("Generating initial story..."):
+            st.session_state.initial_story = generate_initial_story(requirement_text, app_context)
+        st.success("🎉 Initial User Story Generated!")
 
 # ------------------------------------------------
-# OUTPUT
+# DISPLAY INITIAL STORY
 # ------------------------------------------------
-if st.session_state.generated_story is not None:
-    st.success("🎉 User Story Generated Successfully!")
-    st.markdown(st.session_state.generated_story)
+if st.session_state.initial_story:
+    st.markdown("### 📝 Initial User Story")
+    st.markdown(st.session_state.initial_story)
 
-    col1, col2 = st.columns(2)
+# ------------------------------------------------
+# FOLLOW-UP LOOP
+# ------------------------------------------------
+if st.session_state.initial_story:
+    st.subheader("💬 Follow-up Questions (Continuous)")
 
-    if col1.button("🔄 Regenerate"):
-        with st.spinner("Improving quality..."):
-            improved_prompt = f"Improve this user story:\n{st.session_state.generated_story}"
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": improved_prompt}],
-                temperature=0.3,
-            )
-            st.session_state.generated_story = response.choices[0].message.content
-            st.rerun()
+    # Persist input
+    st.session_state.followup_input = st.text_area(
+        "Enter your follow-up question or instruction:",
+        value=st.session_state.followup_input,
+        height=100
+    )
 
-    if col2.button("⬇ Download as Word"):
-        doc = Document()
-        doc.add_heading("AI Generated User Story", level=1)
-        doc.add_paragraph(st.session_state.generated_story)
+    if st.button("Ask AI"):
+        if st.session_state.followup_input.strip() != "":
+            with st.spinner("AI is responding..."):
+                answer = generate_followup(st.session_state.followup_input)
+            st.session_state.followup_input = ""  # clear input after sending
+            st.success("✅ AI Response:")
+            st.markdown(answer)
 
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-
-        st.download_button(
-            label="Download File",
-            data=buffer,
-            file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+# ------------------------------------------------
+# DISPLAY FOLLOW-UP HISTORY
+# ------------------------------------------------
+if st.session_state.chat_history:
+    st.subheader("🗂 Follow-up History")
+    for idx, f in enumerate(st.session_state.chat_history,1):
+        st.markdown(f"**Follow-up {idx}:** {f}")
