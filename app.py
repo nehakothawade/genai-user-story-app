@@ -1,197 +1,219 @@
 import streamlit as st
 from groq import Groq
 from docx import Document
+from PyPDF2 import PdfReader
 from datetime import datetime
 from io import BytesIO
+import base64
 
-# ------------------------------------------------
+# ----------------------------------
 # PAGE CONFIG
-# ------------------------------------------------
+# ----------------------------------
 st.set_page_config(
-    page_title="TechVortex | GenAI User Story Generator",
+    page_title="TechVortex - AI User Story Generator",
     page_icon="🚀",
     layout="wide"
 )
 
-# ------------------------------------------------
-# CUSTOM CSS
-# ------------------------------------------------
-st.markdown("""
-<style>
+# ----------------------------------
+# GROQ API SETUP
+# ----------------------------------
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=api_key)
+except Exception:
+    st.error("⚠ GROQ_API_KEY not found in Streamlit secrets.")
+    st.stop()
 
-.stApp {
-    background: linear-gradient(135deg, #eef2f3, #dfe9f3);
-}
+# ----------------------------------
+# SESSION STATE INIT
+# ----------------------------------
+if "generated_story" not in st.session_state:
+    st.session_state.generated_story = None
 
-/* Hero */
-.hero {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
-    padding: 30px;
-    border-radius: 15px;
-    color: white;
-    text-align: center;
-    margin-bottom: 30px;
-}
+# ----------------------------------
+# TITLE
+# ----------------------------------
+st.title("🚀 TechVortex")
+st.subheader("AI-Powered Agile User Story Generator")
+st.write("---")
 
-/* Glass Card */
-.card {
-    background: rgba(255,255,255,0.85);
-    backdrop-filter: blur(10px);
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-    max-width: 1000px;
-    margin: auto;
-}
-
-/* Buttons */
-.stButton>button {
-    border-radius: 10px;
-    height: 3em;
-    font-weight: 600;
-    font-size: 15px;
-    transition: 0.3s;
-}
-
-.stButton>button:hover {
-    transform: scale(1.03);
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ------------------------------------------------
-# SIDEBAR SETTINGS
-# ------------------------------------------------
-with st.sidebar:
-    st.title("⚙ AI Settings")
-    temperature = st.slider("Creativity", 0.0, 1.0, 0.3)
-    model_choice = st.selectbox(
-        "Model",
-        ["llama3-8b-8192", "llama3-70b-8192"]
-    )
-    st.markdown("---")
-    st.caption("GenAI Agile Backlog Builder")
-
-# ------------------------------------------------
-# HERO HEADER
-# ------------------------------------------------
-st.markdown("""
-<div class="hero">
-    <h1>🚀 TechVortex</h1>
-    <p>AI-Powered User Story Generator</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ------------------------------------------------
-# MAIN CARD
-# ------------------------------------------------
-st.markdown('<div class="card">', unsafe_allow_html=True)
-
-st.subheader("Enter Raw Requirement or Upload File")
-
-# Text Input
-requirement_text = st.text_area(
-    "Requirement Input",
-    height=180,
-    placeholder="Example: Users should be able to reset password via OTP..."
+# ----------------------------------
+# APPLICATION CONTEXT (OPTIONAL)
+# ----------------------------------
+st.subheader("🧩 Application Context (Optional)")
+application_context = st.text_area(
+    "Describe the application/domain",
+    height=120,
+    placeholder="Example: Retail banking mobile app integrated with SAP backend..."
 )
 
-# File Upload
+st.write("---")
+
+# ----------------------------------
+# FILE UPLOAD (OPTIONAL)
+# ----------------------------------
+st.subheader("📂 Upload Requirement File (Optional)")
+
 uploaded_file = st.file_uploader(
-    "Or Upload Requirement File (.txt or .docx)",
-    type=["txt", "docx"]
+    "Upload .docx or .pdf file",
+    type=["docx", "pdf"]
 )
 
-file_text = ""
-
-# Read file content
-if uploaded_file is not None:
-    if uploaded_file.type == "text/plain":
-        file_text = uploaded_file.read().decode("utf-8")
+def extract_text(uploaded_file):
+    text = ""
+    if uploaded_file.type == "application/pdf":
+        reader = PdfReader(uploaded_file)
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
     elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(uploaded_file)
-        file_text = "\n".join([para.text for para in doc.paragraphs])
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    return text
 
-# Final input selection priority
-final_input = requirement_text.strip() if requirement_text.strip() else file_text.strip()
+# ----------------------------------
+# REQUIREMENT INPUT
+# ----------------------------------
+if uploaded_file:
+    extracted_text = extract_text(uploaded_file)
+    st.success("✅ File uploaded successfully!")
+    requirement_text = st.text_area(
+        "📌 Extracted Requirement (Editable)",
+        value=extracted_text,
+        height=250
+    )
+else:
+    requirement_text = st.text_area(
+        "📌 Enter Raw Requirement",
+        height=250,
+        placeholder="Example: Users should be able to login using OTP..."
+    )
 
-# Word Counter
-word_count = len(final_input.split()) if final_input else 0
-char_count = len(final_input) if final_input else 0
-st.caption(f"Words: {word_count} | Characters: {char_count}")
+# ----------------------------------
+# AI GENERATION FUNCTION
+# ----------------------------------
+def generate_story(requirement, app_context=None):
 
-# ------------------------------------------------
-# GROQ CLIENT
-# ------------------------------------------------
-client = Groq(api_key="YOUR_GROQ_API_KEY")
+    context_block = ""
+    if app_context and app_context.strip() != "":
+        context_block = f"Application Context:\n{app_context}\n\n"
 
-def generate_user_story(requirement):
     prompt = f"""
-Convert the raw requirement into:
+You are a Senior Agile Business Analyst.
 
-1. Structured User Story (As a..., I want..., So that...)
-2. Acceptance Criteria (bullet points)
-3. Edge Cases
-4. Business Rules
+{context_block}
+
+Convert the requirement into:
+- Atomic User Stories
+- Follow INVEST principles
+- Add Acceptance Criteria
+- Include Edge Cases
+- Mention Assumptions
+- Ask Clarifications if needed
+
+STRICT FORMAT:
+
+---
+### User Story
+As a <role>
+I want <functionality>
+So that <business value>
+
+Acceptance Criteria:
+1.
+2.
+
+Edge Cases:
+-
+
+Assumptions:
+-
+
+Clarifications Needed:
+-
+---
 
 Requirement:
 {requirement}
 """
+
     response = client.chat.completions.create(
-        model=model_choice,
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
+        temperature=0.5,
     )
 
     return response.choices[0].message.content
 
-# ------------------------------------------------
-# GENERATE BUTTON
-# ------------------------------------------------
-generate_clicked = st.button("✨ Generate User Story")
+# ----------------------------------
+# GENERATE BUTTON (STRICT CONTROL)
+# ----------------------------------
+col1, col2 = st.columns(2)
 
-if generate_clicked:
-    if final_input == "":
+if col1.button("✨ Generate User Story"):
+    if requirement_text.strip() == "":
         st.warning("Please enter or upload a requirement.")
     else:
-        with st.spinner("Generating high-quality user story..."):
-            output = generate_user_story(final_input)
-            st.session_state.generated_story = output
+        with st.spinner("Generating AI User Story..."):
+            st.session_state.generated_story = generate_story(
+                requirement_text,
+                application_context
+            )
 
-# ------------------------------------------------
-# OUTPUT SECTION
-# ------------------------------------------------
-if "generated_story" in st.session_state:
+# ----------------------------------
+# DISPLAY OUTPUT (ONLY IF EXISTS)
+# ----------------------------------
+if st.session_state.generated_story:
 
-    st.markdown("---")
-    st.markdown("### 📄 Generated User Story")
+    st.success("🎉 User Story Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
-    col1, col2 = st.columns(2)
+    st.write("---")
 
-    # Regenerate
-    with col1:
-        if st.button("🔄 Regenerate"):
-            with st.spinner("Regenerating..."):
-                output = generate_user_story(final_input)
-                st.session_state.generated_story = output
+    col3, col4 = st.columns(2)
 
-    # Download
-    with col2:
+    # REGENERATE
+    if col3.button("🔄 Regenerate"):
+        with st.spinner("Improving story quality..."):
+            improved_prompt = f"""
+Improve the following user story to make it:
+- More clear
+- More detailed
+- More testable
+- Better structured
+
+{st.session_state.generated_story}
+"""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": improved_prompt}],
+                temperature=0.3,
+            )
+            st.session_state.generated_story = response.choices[0].message.content
+            st.rerun()
+
+    # DOWNLOAD
+    if col4.button("⬇ Download as Word"):
         doc = Document()
-        doc.add_heading("Generated User Story", level=1)
+        doc.add_heading("AI Generated User Story", level=1)
         doc.add_paragraph(st.session_state.generated_story)
 
         buffer = BytesIO()
         doc.save(buffer)
         buffer.seek(0)
 
-        st.download_button(
-            label="⬇ Download as DOCX",
-            data=buffer,
-            file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+        b64 = base64.b64encode(buffer.read()).decode()
+        file_name = f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 
-st.markdown('</div>', unsafe_allow_html=True)
+        href = f"""
+        <a href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}"
+        download="{file_name}">
+        Click here if download does not start automatically
+        </a>
+        """
+
+        st.success("Download starting...")
+        st.markdown(href, unsafe_allow_html=True)
