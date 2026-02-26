@@ -58,11 +58,11 @@ client = Groq(api_key=api_key)
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
 if "current_question" not in st.session_state:
     st.session_state.current_question = None
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # ------------------------------------------------
 # HERO
@@ -75,18 +75,55 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# INPUT
+# APPLICATION CONTEXT
 # ------------------------------------------------
-st.subheader("📌 Enter Requirement")
-requirement_text = st.text_area("", height=200)
+st.subheader("🧩 Application Context (Optional)")
+application_context = st.text_area("", height=100)
+
+# ------------------------------------------------
+# FILE UPLOAD
+# ------------------------------------------------
+st.subheader("📂 Upload Requirement File (Optional)")
+uploaded_file = st.file_uploader("Upload .docx or .pdf file", type=["docx", "pdf"])
+
+def extract_text(file):
+    text = ""
+    if file.type == "application/pdf":
+        reader = PdfReader(file)
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        doc = Document(file)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    return text
+
+if uploaded_file:
+    extracted_text = extract_text(uploaded_file)
+    st.success("✅ File uploaded successfully!")
+    requirement_text = st.text_area(
+        "📌 Extracted Requirement (Editable)",
+        value=extracted_text,
+        height=220
+    )
+else:
+    requirement_text = st.text_area(
+        "📌 Enter Raw Requirement",
+        height=220
+    )
 
 # ------------------------------------------------
 # GENERATE STORY
 # ------------------------------------------------
-def generate_story(requirement):
+def generate_story(requirement, context):
 
     prompt = f"""
 You are a Senior Agile Business Analyst.
+
+Application Context:
+{context}
 
 Convert the requirement into:
 - Atomic user stories
@@ -108,14 +145,13 @@ ask ONE intelligent clarification question at the end.
 
 if st.button("✨ Generate User Story"):
     if requirement_text.strip() == "":
-        st.warning("Please enter requirement.")
+        st.warning("Please enter or upload requirement.")
     else:
         with st.spinner("Generating..."):
-            full_output = generate_story(requirement_text)
+            full_output = generate_story(requirement_text, application_context)
 
-            # Split last question from story
             parts = full_output.strip().split("?")
-            story = "?".join(parts[:-1])  # everything except last question
+            story = "?".join(parts[:-1])
             question = parts[-1] + "?"
 
             st.session_state.generated_story = story
@@ -124,17 +160,16 @@ if st.button("✨ Generate User Story"):
             st.rerun()
 
 # ------------------------------------------------
-# DISPLAY STORY
+# DISPLAY STORY + FOLLOW-UP LOOP
 # ------------------------------------------------
 if st.session_state.generated_story:
 
     st.success("🎉 User Story Generated")
     st.markdown(st.session_state.generated_story)
-
     st.divider()
 
-    # Show current follow-up question
     if st.session_state.current_question:
+
         st.info(f"🤖 Follow-up Question:\n\n{st.session_state.current_question}")
 
         user_answer = st.text_area("Your Answer:", height=120)
@@ -149,8 +184,6 @@ if st.session_state.generated_story:
                 with st.spinner("Thinking..."):
 
                     follow_prompt = f"""
-You are a Senior Agile Business Analyst.
-
 User Story:
 {st.session_state.generated_story}
 
@@ -161,8 +194,8 @@ User Answer:
 {user_answer}
 
 1. Acknowledge briefly.
-2. Ask ONE next intelligent clarification question.
-Do NOT rewrite the user story.
+2. Ask ONE new intelligent clarification question.
+Do NOT rewrite the story.
 """
 
                     response = client.chat.completions.create(
@@ -173,7 +206,6 @@ Do NOT rewrite the user story.
 
                     output = response.choices[0].message.content
 
-                    # Split acknowledgement and next question
                     parts = output.strip().split("?")
                     acknowledgement = "?".join(parts[:-1])
                     next_question = parts[-1] + "?"
@@ -187,7 +219,7 @@ Do NOT rewrite the user story.
                     st.session_state.current_question = next_question
                     st.rerun()
 
-        # Finish
+        # Download & Finish
         if col2.button("✅ Download & Finish"):
 
             doc = Document()
@@ -206,7 +238,7 @@ Do NOT rewrite the user story.
             )
 
     # ------------------------------------------------
-    # SHOW DISCUSSION
+    # DISCUSSION HISTORY
     # ------------------------------------------------
     if st.session_state.chat_history:
 
