@@ -15,30 +15,28 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# CLEAN CSS FIX
+# CSS FIX (Hero Not Cut + Proper Width)
 # ------------------------------------------------
 st.markdown("""
 <style>
 
-/* Remove Streamlit default white background */
+/* App Background */
 [data-testid="stAppViewContainer"] {
     background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-/* REMOVE white block container */
+/* Keep proper top spacing */
 .block-container {
     max-width: 900px;
-    padding-top: 0rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding-top: 2rem;
     margin: auto;
 }
 
 /* Blue Hero */
 .hero {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
-    padding: 35px;
-    border-radius: 0 0 20px 20px;
+    padding: 40px;
+    border-radius: 20px;
     color: white;
     text-align: center;
     margin-bottom: 40px;
@@ -49,6 +47,13 @@ st.markdown("""
     border-radius: 8px;
     height: 3em;
     font-weight: 600;
+}
+
+.chat-box {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-top: 20px;
 }
 
 </style>
@@ -70,8 +75,11 @@ except Exception:
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 # ------------------------------------------------
-# HERO SECTION (BLUE HEADER KEPT)
+# HERO
 # ------------------------------------------------
 st.markdown("""
 <div class="hero">
@@ -81,14 +89,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# APPLICATION CONTEXT
+# INPUT SECTION
 # ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
 application_context = st.text_area("", height=100)
 
-# ------------------------------------------------
-# FILE UPLOAD
-# ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
 uploaded_file = st.file_uploader(
     "Upload .docx or .pdf file",
@@ -120,59 +125,50 @@ if uploaded_file:
 else:
     requirement_text = st.text_area(
         "📌 Enter Raw Requirement",
-        height=220,
-        placeholder="Example: Users should login using OTP verification..."
+        height=220
     )
 
 # ------------------------------------------------
-# AI FUNCTION
+# AI FUNCTIONS
 # ------------------------------------------------
 def generate_story(requirement, context):
-
-    context_block = ""
-    if context.strip():
-        context_block = f"Application Context:\n{context}\n\n"
+    context_block = f"Application Context:\n{context}\n\n" if context.strip() else ""
 
     prompt = f"""
 You are a Senior Agile Business Analyst.
 
 {context_block}
 
-Convert the requirement into:
-- Atomic user stories
-- Add Acceptance Criteria
-- Include Edge Cases
-- Mention Assumptions
-
-STRICT FORMAT:
-
----
-### User Story
-As a <role>
-I want <functionality>
-So that <business value>
-
-Acceptance Criteria:
-1.
-2.
-
-Edge Cases:
--
-
-Assumptions:
--
----
+Convert the requirement into structured user stories
+with acceptance criteria, edge cases and assumptions.
 
 Requirement:
 {requirement}
 """
-
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
     )
+    return response.choices[0].message.content
 
+
+def followup_response(question):
+    prompt = f"""
+You previously generated the following user story:
+
+{st.session_state.generated_story}
+
+User follow-up question:
+{question}
+
+Respond clearly and structured.
+"""
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4,
+    )
     return response.choices[0].message.content
 
 # ------------------------------------------------
@@ -187,29 +183,38 @@ if st.button("✨ Generate User Story"):
                 requirement_text,
                 application_context
             )
+            st.session_state.chat_history = []
 
 # ------------------------------------------------
 # OUTPUT
 # ------------------------------------------------
-if st.session_state.generated_story is not None:
+if st.session_state.generated_story:
 
     st.success("🎉 User Story Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
-    col1, col2 = st.columns(2)
+    st.markdown("---")
+    st.subheader("💬 Ask Follow-up Questions")
 
-    if col1.button("🔄 Regenerate"):
-        with st.spinner("Improving quality..."):
-            improved_prompt = f"Improve this user story:\n{st.session_state.generated_story}"
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": improved_prompt}],
-                temperature=0.3,
-            )
-            st.session_state.generated_story = response.choices[0].message.content
-            st.rerun()
+    user_question = st.text_input(
+        "Type your question (e.g., Explain assumptions one by one)"
+    )
 
-    if col2.button("⬇ Download as Word"):
+    if st.button("Ask"):
+        if user_question.strip() != "":
+            answer = followup_response(user_question)
+            st.session_state.chat_history.append(("You", user_question))
+            st.session_state.chat_history.append(("AI", answer))
+
+    # Display chat
+    for role, message in st.session_state.chat_history:
+        if role == "You":
+            st.markdown(f"**🧑 You:** {message}")
+        else:
+            st.markdown(f"**🤖 AI:** {message}")
+
+    # Download
+    if st.button("⬇ Download as Word"):
         doc = Document()
         doc.add_heading("AI Generated User Story", level=1)
         doc.add_paragraph(st.session_state.generated_story)
