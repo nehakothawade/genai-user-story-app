@@ -2,33 +2,31 @@ import streamlit as st
 from groq import Groq
 from docx import Document
 from PyPDF2 import PdfReader
-from datetime import datetime
-from io import BytesIO
 
-# ---------------------------
+# ------------------------------------------------
 # PAGE CONFIG
-# ---------------------------
+# ------------------------------------------------
 st.set_page_config(
-    page_title="TechVortex | AI User Story Generator",
+    page_title="TechVortex | AI-Powered User Story Generator",
     page_icon="🚀",
     layout="wide"
 )
 
-# ---------------------------
-# CSS
-# ---------------------------
+# ------------------------------------------------
+# CLEAN CSS
+# ------------------------------------------------
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] {background: linear-gradient(135deg, #eef2f3, #dfe9f3);}
-.block-container {max-width: 900px; padding: 0 1rem; margin:auto;}
-.hero {background: linear-gradient(90deg,#1e3c72,#2a5298); padding:35px; border-radius:0 0 20px 20px; color:white; text-align:center; margin-bottom:40px;}
-.stButton>button {border-radius:8px; height:3em; font-weight:600;}
+[data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #eef2f3, #dfe9f3); }
+.block-container { max-width: 900px; padding: 0 1rem; margin: auto; }
+.hero { background: linear-gradient(90deg,#1e3c72,#2a5298); padding:35px; border-radius:0 0 20px 20px; color:white; text-align:center; margin-bottom:40px; }
+.stButton>button { border-radius:8px; height:3em; font-weight:600; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------
+# ------------------------------------------------
 # GROQ SETUP
-# ---------------------------
+# ------------------------------------------------
 try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
@@ -36,33 +34,35 @@ except Exception:
     st.error("⚠ GROQ_API_KEY not configured.")
     st.stop()
 
-# ---------------------------
+# ------------------------------------------------
 # SESSION STATE
-# ---------------------------
-if "story" not in st.session_state:
-    st.session_state.story = None   # initial user story
-if "followups" not in st.session_state:
-    st.session_state.followups = [] # list of follow-up AI responses
+# ------------------------------------------------
+if "initial_story" not in st.session_state:
+    st.session_state.initial_story = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "followup_input" not in st.session_state:
+    st.session_state.followup_input = ""
 
-# ---------------------------
+# ------------------------------------------------
 # HERO
-# ---------------------------
+# ------------------------------------------------
 st.markdown("""
 <div class="hero">
 <h1>🚀 TechVortex</h1>
-<p>AI-Powered Agile User Story Generator with Continuous Follow-ups</p>
+<p>Continuous AI User Story Generator with Infinite Follow-ups</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------
-# APP CONTEXT
-# ---------------------------
+# ------------------------------------------------
+# APPLICATION CONTEXT
+# ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
 app_context = st.text_area("", height=100, placeholder="Optional context to guide AI...")
 
-# ---------------------------
+# ------------------------------------------------
 # FILE UPLOAD
-# ---------------------------
+# ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
 uploaded_file = st.file_uploader("Upload .docx or .pdf file", type=["docx","pdf"])
 
@@ -82,13 +82,13 @@ def extract_text(file):
 if uploaded_file:
     extracted_text = extract_text(uploaded_file)
     st.success("✅ File uploaded successfully!")
-    req_text = st.text_area("📌 Requirement (Editable)", value=extracted_text, height=220)
+    requirement_text = st.text_area("📌 Requirement (Editable)", value=extracted_text, height=220)
 else:
-    req_text = st.text_area("📌 Enter Requirement", height=220, placeholder="Example: Users should login using OTP verification...")
+    requirement_text = st.text_area("📌 Enter Requirement", height=220, placeholder="Example: Users should login using OTP verification...")
 
-# ---------------------------
+# ------------------------------------------------
 # AI FUNCTIONS
-# ---------------------------
+# ------------------------------------------------
 def generate_initial_story(requirement, context):
     ctx_block = f"Application Context:\n{context}\n\n" if context.strip() else ""
     prompt = f"""
@@ -104,23 +104,6 @@ Convert this requirement into:
 
 STRICT FORMAT:
 
----
-### User Story
-As a <role>
-I want <functionality>
-So that <business value>
-
-Acceptance Criteria:
-1.
-2.
-
-Edge Cases:
--
-
-Assumptions:
--
----
-
 Requirement:
 {requirement}
 """
@@ -132,11 +115,10 @@ Requirement:
     return resp.choices[0].message.content
 
 def generate_followup(question):
-    # Context: initial story + previous follow-ups
     messages = [{"role":"system","content":"You are a helpful AI Business Analyst."}]
-    if st.session_state.story:
-        messages.append({"role":"assistant","content":st.session_state.story})
-    for f in st.session_state.followups:
+    if st.session_state.initial_story:
+        messages.append({"role":"assistant","content":st.session_state.initial_story})
+    for f in st.session_state.chat_history:
         messages.append({"role":"assistant","content":f})
     messages.append({"role":"user","content":question})
     
@@ -146,69 +128,46 @@ def generate_followup(question):
         temperature=0.5
     )
     ans = resp.choices[0].message.content
-    st.session_state.followups.append(ans)
+    st.session_state.chat_history.append(ans)
     return ans
 
-# ---------------------------
-# PHASE 1: INITIAL GENERATION
-# ---------------------------
+# ------------------------------------------------
+# INITIAL GENERATION
+# ------------------------------------------------
 st.subheader("✨ Generate Initial User Story")
 if st.button("Generate User Story"):
-    if req_text.strip()=="":
+    if requirement_text.strip() == "":
         st.warning("Please enter a requirement.")
     else:
-        with st.spinner("Generating initial user story..."):
-            st.session_state.story = generate_initial_story(req_text, app_context)
+        with st.spinner("Generating initial story..."):
+            st.session_state.initial_story = generate_initial_story(requirement_text, app_context)
         st.success("🎉 Initial User Story Generated!")
-        st.markdown(st.session_state.story)
+        st.markdown(st.session_state.initial_story)
 
-# ---------------------------
-# PHASE 2: FOLLOW-UP LOOP
-# ---------------------------
-if st.session_state.story:
-    st.subheader("💬 Ask Follow-up Questions (Continuous Loop)")
-    followup_input = st.text_area("Enter follow-up question or instruction:")
+# ------------------------------------------------
+# FOLLOW-UP LOOP
+# ------------------------------------------------
+if st.session_state.initial_story:
+    st.subheader("💬 Follow-up Questions (Continuous)")
+
+    st.session_state.followup_input = st.text_area(
+        "Enter your follow-up question or clarification:",
+        value=st.session_state.followup_input,
+        height=100
+    )
 
     if st.button("Ask AI"):
-        if followup_input.strip()=="":
-            st.warning("Please enter a follow-up question.")
-        else:
+        if st.session_state.followup_input.strip() != "":
             with st.spinner("AI is responding..."):
-                followup_ans = generate_followup(followup_input)
+                answer = generate_followup(st.session_state.followup_input)
             st.success("✅ AI Response:")
-            st.markdown(followup_ans)
+            st.markdown(answer)
+            st.session_state.followup_input = ""  # clear input after sending
 
-# ---------------------------
-# DISPLAY ALL FOLLOW-UPS
-# ---------------------------
-if st.session_state.followups:
+# ------------------------------------------------
+# DISPLAY CHAT HISTORY
+# ------------------------------------------------
+if st.session_state.chat_history:
     st.subheader("📝 Follow-up History")
-    for idx, f in enumerate(st.session_state.followups,1):
+    for idx, f in enumerate(st.session_state.chat_history,1):
         st.markdown(f"**Follow-up {idx}:** {f}")
-
-# ---------------------------
-# DOWNLOAD FINAL DOC
-# ---------------------------
-if st.session_state.story:
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("⬇ Download User Story + Follow-ups as Word"):
-            doc = Document()
-            doc.add_heading("AI Generated User Story",level=1)
-            doc.add_paragraph(st.session_state.story)
-            for idx,f in enumerate(st.session_state.followups,1):
-                doc.add_paragraph(f"Follow-up {idx}:\n{f}")
-            buffer = BytesIO()
-            doc.save(buffer)
-            buffer.seek(0)
-            st.download_button(
-                label="Download File",
-                data=buffer,
-                file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-    with col2:
-        if st.button("🔄 Clear All"):
-            st.session_state.story=None
-            st.session_state.followups=[]
-            st.experimental_rerun()
