@@ -11,7 +11,7 @@ from io import BytesIO
 st.set_page_config(
     page_title="TechVortex | AI User Story Generator",
     page_icon="🚀",
-    layout="centered"
+    layout="wide"
 )
 
 # ------------------------------------------------
@@ -20,39 +20,35 @@ st.set_page_config(
 st.markdown("""
 <style>
 
+/* Remove default white space */
+.block-container {
+    padding-top: 0rem;
+    padding-left: 0rem;
+    padding-right: 0rem;
+}
+
 /* Background */
 .stApp {
     background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-/* Remove extra spacing */
-.block-container {
-    padding-top: 1rem;
+/* Blue Hero */
+.hero {
+    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    padding: 35px;
+    border-radius: 0px 0px 20px 20px;
+    color: white;
+    text-align: center;
 }
 
-/* Main Center Card */
-.main-box {
+/* Main Center Box */
+.main-container {
+    max-width: 900px;
+    margin: 40px auto;
     background: rgba(255,255,255,0.95);
     padding: 40px;
     border-radius: 20px;
     box-shadow: 0 8px 30px rgba(0,0,0,0.1);
-    max-width: 850px;
-    margin: auto;
-}
-
-/* Title */
-.title {
-    text-align: center;
-    font-size: 36px;
-    font-weight: bold;
-    color: #1e3c72;
-    margin-bottom: 5px;
-}
-
-.subtitle {
-    text-align: center;
-    color: gray;
-    margin-bottom: 30px;
 }
 
 /* Buttons */
@@ -72,7 +68,7 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except Exception:
-    st.error("⚠ GROQ_API_KEY not configured in Streamlit secrets.")
+    st.error("⚠ GROQ_API_KEY not configured.")
     st.stop()
 
 # ------------------------------------------------
@@ -82,26 +78,25 @@ if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
 # ------------------------------------------------
-# MAIN CENTER BOX
+# BLUE HERO (KEPT AS IS)
 # ------------------------------------------------
-st.markdown('<div class="main-box">', unsafe_allow_html=True)
+st.markdown("""
+<div class="hero">
+    <h1>🚀 TechVortex</h1>
+    <p>AI-Powered Agile User Story Generator</p>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown('<div class="title">🚀 TechVortex</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-Powered Agile User Story Generator</div>', unsafe_allow_html=True)
+# ------------------------------------------------
+# MAIN CENTERED BOX
+# ------------------------------------------------
+st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
-# ------------------------------------------------
-# APPLICATION CONTEXT
-# ------------------------------------------------
+# Application Context
 st.subheader("🧩 Application Context (Optional)")
-application_context = st.text_area(
-    "",
-    height=100,
-    placeholder="Example: Retail banking mobile app integrated with SAP backend..."
-)
+application_context = st.text_area("", height=100)
 
-# ------------------------------------------------
-# FILE UPLOAD
-# ------------------------------------------------
+# File Upload
 st.subheader("📂 Upload Requirement File (Optional)")
 uploaded_file = st.file_uploader(
     "Upload .docx or .pdf file",
@@ -137,13 +132,11 @@ else:
         placeholder="Example: Users should login using OTP verification..."
     )
 
-# ------------------------------------------------
-# AI FUNCTION
-# ------------------------------------------------
+# AI Function
 def generate_story(requirement, context):
 
     context_block = ""
-    if context and context.strip() != "":
+    if context.strip():
         context_block = f"Application Context:\n{context}\n\n"
 
     prompt = f"""
@@ -153,11 +146,9 @@ You are a Senior Agile Business Analyst.
 
 Convert the requirement into:
 - Atomic user stories
-- Follow INVEST principles
 - Add Acceptance Criteria
 - Include Edge Cases
 - Mention Assumptions
-- Ask Clarifications if needed
 
 STRICT FORMAT:
 
@@ -176,9 +167,6 @@ Edge Cases:
 
 Assumptions:
 -
-
-Clarifications Needed:
--
 ---
 
 Requirement:
@@ -193,12 +181,8 @@ Requirement:
 
     return response.choices[0].message.content
 
-# ------------------------------------------------
-# GENERATE BUTTON
-# ------------------------------------------------
-generate_clicked = st.button("✨ Generate User Story")
-
-if generate_clicked:
+# Generate Button
+if st.button("✨ Generate User Story"):
     if requirement_text.strip() == "":
         st.warning("Please enter or upload a requirement.")
     else:
@@ -208,9 +192,7 @@ if generate_clicked:
                 application_context
             )
 
-# ------------------------------------------------
-# OUTPUT
-# ------------------------------------------------
+# Output
 if st.session_state.generated_story is not None:
 
     st.success("🎉 User Story Generated Successfully!")
@@ -218,14 +200,9 @@ if st.session_state.generated_story is not None:
 
     col1, col2 = st.columns(2)
 
-    # Regenerate
     if col1.button("🔄 Regenerate"):
         with st.spinner("Improving quality..."):
-            improved_prompt = f"""
-Improve the following user story to make it clearer and more testable:
-
-{st.session_state.generated_story}
-"""
+            improved_prompt = f"Improve this user story:\n{st.session_state.generated_story}"
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": improved_prompt}],
@@ -234,7 +211,6 @@ Improve the following user story to make it clearer and more testable:
             st.session_state.generated_story = response.choices[0].message.content
             st.rerun()
 
-    # Download
     if col2.button("⬇ Download as Word"):
         doc = Document()
         doc.add_heading("AI Generated User Story", level=1)
