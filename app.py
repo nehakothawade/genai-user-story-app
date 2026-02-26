@@ -11,42 +11,57 @@ from io import BytesIO
 st.set_page_config(
     page_title="TechVortex | AI User Story Generator",
     page_icon="🚀",
-    layout="wide"
+    layout="centered"
 )
 
 # ------------------------------------------------
-# CUSTOM UI (UNCHANGED PREMIUM STYLE)
+# CUSTOM CSS
 # ------------------------------------------------
 st.markdown("""
 <style>
+
+/* Background */
 .stApp {
     background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-.hero {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
-    padding: 30px;
-    border-radius: 15px;
-    color: white;
-    text-align: center;
-    margin-bottom: 30px;
+/* Remove extra spacing */
+.block-container {
+    padding-top: 1rem;
 }
 
-.card {
-    background: rgba(255,255,255,0.9);
+/* Main Center Card */
+.main-box {
+    background: rgba(255,255,255,0.95);
     padding: 40px;
     border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-    max-width: 1000px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    max-width: 850px;
     margin: auto;
 }
 
+/* Title */
+.title {
+    text-align: center;
+    font-size: 36px;
+    font-weight: bold;
+    color: #1e3c72;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    color: gray;
+    margin-bottom: 30px;
+}
+
+/* Buttons */
 .stButton>button {
-    border-radius: 10px;
+    border-radius: 8px;
     height: 3em;
     font-weight: 600;
-    font-size: 15px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,7 +72,7 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except Exception:
-    st.error("⚠ GROQ_API_KEY not found in Streamlit secrets.")
+    st.error("⚠ GROQ_API_KEY not configured in Streamlit secrets.")
     st.stop()
 
 # ------------------------------------------------
@@ -67,27 +82,22 @@ if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
 # ------------------------------------------------
-# HERO SECTION
+# MAIN CENTER BOX
 # ------------------------------------------------
-st.markdown("""
-<div class="hero">
-    <h1>🚀 TechVortex</h1>
-    <p>AI-Powered Agile User Story Generator</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div class="main-box">', unsafe_allow_html=True)
 
-st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<div class="title">🚀 TechVortex</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-Powered Agile User Story Generator</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------
 # APPLICATION CONTEXT
 # ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
 application_context = st.text_area(
-    "Describe the application/domain context",
-    height=120
+    "",
+    height=100,
+    placeholder="Example: Retail banking mobile app integrated with SAP backend..."
 )
-
-st.write("---")
 
 # ------------------------------------------------
 # FILE UPLOAD
@@ -118,12 +128,12 @@ if uploaded_file:
     requirement_text = st.text_area(
         "📌 Extracted Requirement (Editable)",
         value=extracted_text,
-        height=250
+        height=220
     )
 else:
     requirement_text = st.text_area(
         "📌 Enter Raw Requirement",
-        height=250,
+        height=220,
         placeholder="Example: Users should login using OTP verification..."
     )
 
@@ -184,7 +194,7 @@ Requirement:
     return response.choices[0].message.content
 
 # ------------------------------------------------
-# GENERATE BUTTON (STRICT LOGIC)
+# GENERATE BUTTON
 # ------------------------------------------------
 generate_clicked = st.button("✨ Generate User Story")
 
@@ -199,25 +209,20 @@ if generate_clicked:
             )
 
 # ------------------------------------------------
-# OUTPUT (ONLY IF GENERATED)
+# OUTPUT
 # ------------------------------------------------
 if st.session_state.generated_story is not None:
 
-    st.markdown("---")
     st.success("🎉 User Story Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
     col1, col2 = st.columns(2)
 
-    # 🔄 Regenerate
+    # Regenerate
     if col1.button("🔄 Regenerate"):
         with st.spinner("Improving quality..."):
             improved_prompt = f"""
-Improve the following user story to make it:
-- More clear
-- More detailed
-- More testable
-- Better structured
+Improve the following user story to make it clearer and more testable:
 
 {st.session_state.generated_story}
 """
@@ -229,7 +234,7 @@ Improve the following user story to make it:
             st.session_state.generated_story = response.choices[0].message.content
             st.rerun()
 
-    # ⬇ Download
+    # Download
     if col2.button("⬇ Download as Word"):
         doc = Document()
         doc.add_heading("AI Generated User Story", level=1)
