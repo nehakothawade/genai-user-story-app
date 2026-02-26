@@ -1,224 +1,224 @@
 import streamlit as st
 from groq import Groq
 from docx import Document
-from io import BytesIO
+from PyPDF2 import PdfReader
 from datetime import datetime
+from io import BytesIO
 
 # ------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------
 st.set_page_config(
-    page_title="TechVortex - AI User Story Generator",
-    layout="centered"
+    page_title="TechVortex | AI User Story Chat",
+    page_icon="🚀",
+    layout="wide"
 )
 
 # ------------------------------------------------
-# SAFE SESSION STATE INIT
-# ------------------------------------------------
-if "generated_story" not in st.session_state:
-    st.session_state.generated_story = None
-
-if "conversation" not in st.session_state:
-    st.session_state.conversation = []
-
-# ------------------------------------------------
-# GROQ CLIENT (Use Streamlit Secrets)
-# ------------------------------------------------
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-
-# ------------------------------------------------
-# BLUE CENTERED CONTAINER (UNCHANGED)
+# CLEAN CSS FIX
 # ------------------------------------------------
 st.markdown("""
 <style>
-.main-container {
+/* Background Gradient */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #eef2f3, #dfe9f3);
+}
+
+/* Container */
+.block-container {
     max-width: 900px;
+    padding-top: 0rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
     margin: auto;
-    padding: 30px;
-    background-color: #0E1A40;
-    border-radius: 15px;
-    box-shadow: 0px 0px 25px rgba(0,0,0,0.4);
+}
+
+/* Hero Header */
+.hero {
+    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    padding: 35px;
+    border-radius: 0 0 20px 20px;
     color: white;
-}
-h1 {
     text-align: center;
+    margin-bottom: 40px;
 }
-.stTextInput input {
-    background-color: #1B2A60 !important;
-    color: white !important;
+
+/* Buttons */
+.stButton>button {
+    border-radius: 8px;
+    height: 3em;
+    font-weight: 600;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-container">', unsafe_allow_html=True)
-
-st.title("🚀 TechVortex - AI User Story Generator")
+# ------------------------------------------------
+# GROQ SETUP
+# ------------------------------------------------
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=api_key)
+except Exception:
+    st.error("⚠ GROQ_API_KEY not configured.")
+    st.stop()
 
 # ------------------------------------------------
-# PROJECT DETAILS
+# SESSION STATE FOR CHAT
 # ------------------------------------------------
-st.subheader("📌 Project Details")
-
-project_title = st.text_input("Project Title")
-
-requirement_text = st.text_area(
-    "Describe your requirement",
-    height=200
-)
-
-uploaded_file = st.file_uploader(
-    "Or upload a .txt file",
-    type=["txt"]
-)
-
-file_content = ""
-if uploaded_file is not None:
-    file_content = uploaded_file.read().decode("utf-8")
-
-final_requirement = requirement_text if requirement_text else file_content
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # ------------------------------------------------
-# GENERATE USER STORY
+# HERO SECTION
 # ------------------------------------------------
-if st.button("✨ Generate User Story"):
+st.markdown("""
+<div class="hero">
+    <h1>🚀 TechVortex</h1>
+    <p>AI-Powered Agile User Story Chat Generator</p>
+</div>
+""", unsafe_allow_html=True)
 
-    if not project_title.strip():
-        st.warning("Please enter Project Title.")
-    elif not final_requirement.strip():
-        st.warning("Please enter requirement or upload file.")
+# ------------------------------------------------
+# APPLICATION CONTEXT
+# ------------------------------------------------
+st.subheader("🧩 Application Context (Optional)")
+application_context = st.text_area("", height=100, placeholder="Optional context to guide AI...")
+
+# ------------------------------------------------
+# FILE UPLOAD
+# ------------------------------------------------
+st.subheader("📂 Upload Requirement File (Optional)")
+uploaded_file = st.file_uploader("Upload .docx or .pdf file", type=["docx", "pdf"])
+
+def extract_text(file):
+    text = ""
+    if file.type == "application/pdf":
+        reader = PdfReader(file)
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        doc = Document(file)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    return text
+
+if uploaded_file:
+    extracted_text = extract_text(uploaded_file)
+    st.success("✅ File uploaded successfully!")
+    user_input = st.text_area(
+        "📌 Extracted Requirement (Editable)",
+        value=extracted_text,
+        height=220
+    )
+else:
+    user_input = st.text_area(
+        "📌 Enter Requirement",
+        height=220,
+        placeholder="Example: Users should login using OTP verification..."
+    )
+
+# ------------------------------------------------
+# AI FUNCTION
+# ------------------------------------------------
+def ai_chat_response(user_message):
+    context_block = ""
+    if application_context.strip():
+        context_block = f"Application Context:\n{application_context}\n\n"
+
+    prompt = f"""
+You are a Senior Agile Business Analyst AI Assistant.
+
+{context_block}
+
+User Input / Requirement:
+{user_message}
+
+Instructions:
+- Reply in a friendly conversational style.
+- Convert requirement into atomic user stories.
+- Include acceptance criteria, edge cases, and assumptions.
+- Allow follow-up questions and clarifications in a chat style.
+
+STRICT FORMAT:
+
+---
+### User Story
+As a <role>
+I want <functionality>
+So that <business value>
+
+Acceptance Criteria:
+1.
+2.
+
+Edge Cases:
+-
+
+Assumptions:
+-
+---
+"""
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=st.session_state.chat_history + [{"role": "user", "content": prompt}],
+        temperature=0.5,
+    )
+
+    # Add AI response to chat history
+    ai_msg = response.choices[0].message.content
+    st.session_state.chat_history.append({"role": "assistant", "content": ai_msg})
+    return ai_msg
+
+# ------------------------------------------------
+# SEND BUTTON
+# ------------------------------------------------
+if st.button("✨ Send Requirement / Question"):
+    if user_input.strip() == "":
+        st.warning("Please enter or upload a requirement.")
     else:
-        with st.spinner("Generating user story..."):
-
-            story_prompt = f"""
-You are a Senior Agile Business Analyst.
-
-Project Title:
-{project_title}
-
-Generate:
-- Title
-- User Story (As a... I want... So that...)
-- Acceptance Criteria
-- Assumptions
-- Edge Cases
-
-Requirement:
-{final_requirement}
-"""
-
-            story_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": story_prompt}],
-                temperature=0.4,
-            )
-
-            story = story_response.choices[0].message.content
-            st.session_state.generated_story = story
-
-            # First follow-up question
-            followup_prompt = f"""
-User Story:
-{story}
-
-Ask ONE clarification question only.
-Do NOT rewrite the story.
-"""
-
-            followup_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": followup_prompt}],
-                temperature=0.4,
-            )
-
-            first_question = followup_response.choices[0].message.content
-
-            st.session_state.conversation = [
-                {"role": "assistant", "content": first_question}
-            ]
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        with st.spinner("AI is generating response..."):
+            ai_response = ai_chat_response(user_input)
+        st.success("🎉 AI Response Generated!")
 
 # ------------------------------------------------
-# DISPLAY STORY + CHAT
+# DISPLAY CHAT HISTORY
 # ------------------------------------------------
-if st.session_state.generated_story is not None:
+st.subheader("💬 Chat History")
+for msg in st.session_state.chat_history:
+    if msg["role"] == "user":
+        st.markdown(f"**You:** {msg['content']}")
+    else:
+        st.markdown(f"**AI:** {msg['content']}")
 
-    st.success("✅ User Story Generated")
-    st.markdown(st.session_state.generated_story)
-    st.divider()
-
-    st.subheader("💬 Clarification Discussion")
-
-    # Show conversation
-    for message in st.session_state.conversation:
-        if message["role"] == "assistant":
-            st.markdown(f"**🤖 AI:** {message['content']}")
-        else:
-            st.markdown(f"**🙋 You:** {message['content']}")
-
-    st.divider()
-
-    user_input = st.text_input("Type your response")
-
+# ------------------------------------------------
+# DOWNLOAD FINAL USER STORY
+# ------------------------------------------------
+if st.session_state.chat_history:
+    all_stories = "\n\n".join([m["content"] for m in st.session_state.chat_history if m["role"] == "assistant"])
     col1, col2 = st.columns(2)
 
-    # SEND MESSAGE
-    if col1.button("➤ Send"):
+    with col1:
+        if st.button("⬇ Download Chat as Word"):
+            doc = Document()
+            doc.add_heading("AI Generated User Stories (Chat)", level=1)
+            doc.add_paragraph(all_stories)
 
-        if user_input.strip():
+            buffer = BytesIO()
+            doc.save(buffer)
+            buffer.seek(0)
 
-            st.session_state.conversation.append(
-                {"role": "user", "content": user_input}
+            st.download_button(
+                label="Download File",
+                data=buffer,
+                file_name=f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
 
-            with st.spinner("Thinking..."):
-
-                messages = [
-                    {
-                        "role": "system",
-                        "content": f"""
-You are a Senior Agile Business Analyst.
-
-User Story:
-{st.session_state.generated_story}
-
-Do NOT rewrite story.
-Ask ONE clarification question at a time.
-"""
-                    }
-                ]
-
-                for msg in st.session_state.conversation:
-                    messages.append(msg)
-
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=messages,
-                    temperature=0.4,
-                )
-
-                ai_reply = response.choices[0].message.content
-
-                st.session_state.conversation.append(
-                    {"role": "assistant", "content": ai_reply}
-                )
-
-            st.rerun()
-
-    # DOWNLOAD BUTTON
-    if col2.button("⬇ Download & Finish"):
-
-        doc = Document()
-        doc.add_heading(project_title, level=1)
-        doc.add_paragraph(st.session_state.generated_story)
-
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-
-        st.download_button(
-            label="Download File",
-            data=buffer,
-            file_name=f"{project_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-
-st.markdown("</div>", unsafe_allow_html=True)
+    with col2:
+        if st.button("🔄 Clear Chat"):
+            st.session_state.chat_history = []
+            st.experimental_rerun()
