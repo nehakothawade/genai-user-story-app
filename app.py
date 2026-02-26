@@ -15,24 +15,21 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# CLEAN UI CSS
+# UI CSS
 # ------------------------------------------------
 st.markdown("""
 <style>
 
-/* Background */
 [data-testid="stAppViewContainer"] {
     background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-/* Fix content width */
 .block-container {
     max-width: 900px;
     margin: auto;
     padding-top: 2rem;
 }
 
-/* Blue Hero - FIXED (no top cut) */
 .hero {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
     padding: 40px 20px;
@@ -42,7 +39,6 @@ st.markdown("""
     margin-bottom: 40px;
 }
 
-/* Buttons */
 .stButton>button {
     border-radius: 8px;
     height: 3em;
@@ -68,11 +64,11 @@ except Exception:
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
-if "conversation_history" not in st.session_state:
-    st.session_state.conversation_history = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # ------------------------------------------------
-# HERO SECTION
+# HERO
 # ------------------------------------------------
 st.markdown("""
 <div class="hero">
@@ -82,7 +78,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# APPLICATION CONTEXT
+# CONTEXT
 # ------------------------------------------------
 st.subheader("🧩 Application Context (Optional)")
 application_context = st.text_area("", height=100)
@@ -91,10 +87,7 @@ application_context = st.text_area("", height=100)
 # FILE UPLOAD
 # ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
-uploaded_file = st.file_uploader(
-    "Upload .docx or .pdf file",
-    type=["docx", "pdf"]
-)
+uploaded_file = st.file_uploader("Upload .docx or .pdf file", type=["docx", "pdf"])
 
 def extract_text(file):
     text = ""
@@ -121,12 +114,11 @@ if uploaded_file:
 else:
     requirement_text = st.text_area(
         "📌 Enter Raw Requirement",
-        height=220,
-        placeholder="Example: Users should login using OTP verification..."
+        height=220
     )
 
 # ------------------------------------------------
-# AI GENERATION FUNCTION
+# GENERATE STORY
 # ------------------------------------------------
 def generate_story(requirement, context):
 
@@ -145,25 +137,6 @@ Convert the requirement into:
 - Edge Cases
 - Assumptions
 
-STRICT FORMAT:
-
----
-### User Story
-As a <role>
-I want <functionality>
-So that <business value>
-
-Acceptance Criteria:
-1.
-2.
-
-Edge Cases:
--
-
-Assumptions:
--
----
-
 Requirement:
 {requirement}
 """
@@ -176,83 +149,86 @@ Requirement:
 
     return response.choices[0].message.content
 
-# ------------------------------------------------
-# GENERATE BUTTON
-# ------------------------------------------------
 if st.button("✨ Generate User Story"):
     if requirement_text.strip() == "":
         st.warning("Please enter or upload a requirement.")
     else:
-        with st.spinner("Generating AI User Story..."):
+        with st.spinner("Generating..."):
             st.session_state.generated_story = generate_story(
                 requirement_text,
                 application_context
             )
-            st.session_state.conversation_history = []
+            st.session_state.chat_history = []
             st.rerun()
 
 # ------------------------------------------------
-# CONVERSATIONAL REFINEMENT MODE
+# DISPLAY STORY (FIXED)
 # ------------------------------------------------
-if st.session_state.generated_story is not None:
+if st.session_state.generated_story:
 
     st.success("🎉 User Story Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
     st.divider()
-    st.subheader("🧠 Let's Refine Further")
+    st.subheader("💬 Ask Clarification")
 
-    clarification_input = st.text_area(
-        "Add clarification (Assumption, Edge Case, Workflow detail, Business rule, etc.)",
-        height=120,
-        placeholder="Example: Explain OTP expiry behavior..."
+    user_question = st.text_area(
+        "Ask about assumptions, edge cases, logic, workflow, etc.",
+        height=120
     )
 
-    col1, col2 = st.columns(2)
+    if st.button("➤ Ask"):
 
-    # Submit clarification
-    if col1.button("➤ Submit Clarification"):
+        if user_question.strip() != "":
 
-        if clarification_input.strip() != "":
+            with st.spinner("Thinking..."):
 
-            with st.spinner("Refining user story..."):
-
-                refinement_prompt = f"""
+                clarification_prompt = f"""
 You are a Senior Agile Business Analyst.
 
-Current User Story:
+Here is the generated user story:
+
 {st.session_state.generated_story}
 
-User Clarification:
-{clarification_input}
+User Question:
+{user_question}
 
-1. Update the user story accordingly.
-2. Improve assumptions and edge cases.
-3. Ask ONE intelligent follow-up clarification question at the end.
-
-Return updated story + follow-up question.
+Answer ONLY the user question clearly.
+Do NOT rewrite the full user story.
 """
 
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": refinement_prompt}],
+                    messages=[{"role": "user", "content": clarification_prompt}],
                     temperature=0.4,
                 )
 
-                updated_story = response.choices[0].message.content
-                st.session_state.generated_story = updated_story
+                answer = response.choices[0].message.content
 
-                st.session_state.conversation_history.append({
-                    "user": clarification_input,
-                    "ai": updated_story
+                st.session_state.chat_history.append({
+                    "question": user_question,
+                    "answer": answer
                 })
 
                 st.rerun()
 
-    # Finalize
-    if col2.button("✅ Finalize Story"):
-        st.success("✔ Story Finalized Successfully!")
+    # ------------------------------------------------
+    # SHOW CHAT HISTORY
+    # ------------------------------------------------
+    if st.session_state.chat_history:
 
+        st.divider()
+        st.subheader("🧠 Clarification Discussion")
+
+        for chat in st.session_state.chat_history:
+            st.markdown(f"**You:** {chat['question']}")
+            st.markdown(f"**AI:** {chat['answer']}")
+            st.divider()
+
+    # ------------------------------------------------
+    # DOWNLOAD
+    # ------------------------------------------------
+    if st.button("⬇ Download User Story"):
         doc = Document()
         doc.add_heading("AI Generated User Story", level=1)
         doc.add_paragraph(st.session_state.generated_story)
@@ -262,20 +238,8 @@ Return updated story + follow-up question.
         buffer.seek(0)
 
         st.download_button(
-            label="⬇ Download Final Story",
+            label="Download File",
             data=buffer,
             file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-
-    # Show refinement conversation
-    if st.session_state.conversation_history:
-
-        st.divider()
-        st.subheader("💬 Refinement Conversation")
-
-        for chat in st.session_state.conversation_history:
-            st.markdown(f"**You:** {chat['user']}")
-            st.markdown(f"**AI Response:**")
-            st.markdown(chat['ai'])
-            st.divider()
