@@ -15,40 +15,33 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# CUSTOM CSS
+# CLEAN CSS FIX
 # ------------------------------------------------
 st.markdown("""
 <style>
 
-/* Remove default white space */
-.block-container {
-    padding-top: 0rem;
-    padding-left: 0rem;
-    padding-right: 0rem;
+/* Remove Streamlit default white background */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #eef2f3, #dfe9f3);
 }
 
-/* Background */
-.stApp {
-    background: linear-gradient(135deg, #eef2f3, #dfe9f3);
+/* REMOVE white block container */
+.block-container {
+    max-width: 900px;
+    padding-top: 0rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    margin: auto;
 }
 
 /* Blue Hero */
 .hero {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
     padding: 35px;
-    border-radius: 0px 0px 20px 20px;
+    border-radius: 0 0 20px 20px;
     color: white;
     text-align: center;
-}
-
-/* Main Center Box */
-.main-container {
-    max-width: 900px;
-    margin: 40px auto;
-    background: rgba(255,255,255,0.95);
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    margin-bottom: 40px;
 }
 
 /* Buttons */
@@ -78,7 +71,7 @@ if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
 # ------------------------------------------------
-# BLUE HERO (KEPT AS IS)
+# HERO SECTION (BLUE HEADER KEPT)
 # ------------------------------------------------
 st.markdown("""
 <div class="hero">
@@ -88,15 +81,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# MAIN CENTERED BOX
+# APPLICATION CONTEXT
 # ------------------------------------------------
-st.markdown('<div class="main-container">', unsafe_allow_html=True)
-
-# Application Context
 st.subheader("🧩 Application Context (Optional)")
 application_context = st.text_area("", height=100)
 
-# File Upload
+# ------------------------------------------------
+# FILE UPLOAD
+# ------------------------------------------------
 st.subheader("📂 Upload Requirement File (Optional)")
 uploaded_file = st.file_uploader(
     "Upload .docx or .pdf file",
@@ -132,7 +124,9 @@ else:
         placeholder="Example: Users should login using OTP verification..."
     )
 
-# AI Function
+# ------------------------------------------------
+# AI FUNCTION
+# ------------------------------------------------
 def generate_story(requirement, context):
 
     context_block = ""
@@ -181,7 +175,9 @@ Requirement:
 
     return response.choices[0].message.content
 
-# Generate Button
+# ------------------------------------------------
+# GENERATE BUTTON
+# ------------------------------------------------
 if st.button("✨ Generate User Story"):
     if requirement_text.strip() == "":
         st.warning("Please enter or upload a requirement.")
@@ -192,7 +188,9 @@ if st.button("✨ Generate User Story"):
                 application_context
             )
 
-# Output
+# ------------------------------------------------
+# OUTPUT
+# ------------------------------------------------
 if st.session_state.generated_story is not None:
 
     st.success("🎉 User Story Generated Successfully!")
@@ -221,10 +219,8 @@ if st.session_state.generated_story is not None:
         buffer.seek(0)
 
         st.download_button(
-            label="Click to Download",
+            label="Download File",
             data=buffer,
             file_name=f"user_story_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-
-st.markdown('</div>', unsafe_allow_html=True)
