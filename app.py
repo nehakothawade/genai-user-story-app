@@ -5,6 +5,7 @@ from PyPDF2 import PdfReader
 from datetime import datetime
 from io import BytesIO
 import base64
+import os
 
 # ----------------------------------
 # PAGE CONFIG
@@ -16,33 +17,61 @@ st.set_page_config(
 )
 
 # ----------------------------------
-# CUSTOM UI STYLING
+# MODERN UI STYLING
 # ----------------------------------
 st.markdown("""
 <style>
-.big-title {
-    font-size: 42px;
-    font-weight: bold;
-    color: #4B8BBE;
+
+body {
+    background-color: #f4f6f9;
 }
-.subtitle {
-    font-size: 20px;
-    color: gray;
+
+.main-card {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    max-width: 900px;
+    margin: auto;
 }
+
+.gradient-header {
+    background: linear-gradient(90deg, #2E86C1, #28B463);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.counter-box {
+    background: rgba(255,255,255,0.25);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+}
+
+textarea {
+    border-radius: 10px !important;
+}
+
 .stButton>button {
-    border-radius: 10px;
+    border-radius: 8px;
     height: 3em;
-    width: 100%;
+    font-weight: 600;
 }
-.block-container {
-    padding-top: 2rem;
+
+.section-divider {
+    margin-top: 25px;
+    margin-bottom: 25px;
 }
+
 </style>
 """, unsafe_allow_html=True)
-
-st.markdown('<div class="big-title">🚀 AgileGenie</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-Powered Agile Backlog Builder</div>', unsafe_allow_html=True)
-st.write("---")
 
 # ----------------------------------
 # GROQ API SETUP
@@ -51,7 +80,7 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except Exception:
-    st.error("⚠ GROQ_API_KEY not found. Please configure it in Streamlit Secrets.")
+    st.error("⚠ GROQ_API_KEY not found. Configure in Streamlit secrets.")
     st.stop()
 
 # ----------------------------------
@@ -61,25 +90,46 @@ if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
 
 # ----------------------------------
-# APPLICATION CONTEXT INPUT (NEW)
+# MAIN CARD START
 # ----------------------------------
-st.subheader("🧩 Application Context (Optional)")
+st.markdown('<div class="main-card">', unsafe_allow_html=True)
 
-application_context = st.text_area(
-    "Describe the application/domain context",
-    height=120,
-    placeholder="Example: Banking mobile app used by retail customers in India. Integrated with SAP backend..."
+# Requirement Input Placeholder
+requirement_text = st.text_area(
+    "Enter Requirement",
+    height=200,
+    placeholder="Example: System must support biometric login for mobile app..."
 )
 
-st.write("---")
+# Word Counter
+word_count = len(requirement_text.split()) if requirement_text else 0
+char_count = len(requirement_text) if requirement_text else 0
+
+st.markdown(f"""
+<div class="gradient-header">
+    Provide Requirements
+    <div class="counter-box">
+        Words: {word_count} | Characters: {char_count}
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ----------------------------------
-# FILE UPLOAD SECTION
+# APPLICATION CONTEXT
 # ----------------------------------
-st.subheader("📂 Upload Requirement File (Optional)")
+application_context = st.text_area(
+    "Application Context (Optional)",
+    height=100,
+    placeholder="Example: Banking mobile app integrated with SAP backend..."
+)
 
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+# ----------------------------------
+# FILE UPLOAD
+# ----------------------------------
 uploaded_file = st.file_uploader(
-    "Upload a Word (.docx) or PDF (.pdf) file",
+    "Upload Requirement File (.docx or .pdf)",
     type=["docx", "pdf"]
 )
 
@@ -100,23 +150,10 @@ def extract_text_from_file(uploaded_file):
 
     return text
 
-# ----------------------------------
-# REQUIREMENT INPUT
-# ----------------------------------
 if uploaded_file:
     extracted_text = extract_text_from_file(uploaded_file)
-    st.success("✅ File uploaded and text extracted successfully!")
-    requirement_text = st.text_area(
-        "📌 Extracted Requirement (Editable)",
-        value=extracted_text,
-        height=250
-    )
-else:
-    requirement_text = st.text_area(
-        "📌 Enter Raw Requirement",
-        height=250,
-        placeholder="Example: The system should allow users to login using OTP..."
-    )
+    st.success("✅ File uploaded and text extracted!")
+    requirement_text = extracted_text
 
 # ----------------------------------
 # VALIDATION FUNCTION
@@ -142,11 +179,8 @@ def validate_story(output):
 def generate_story(requirement, app_context=None):
 
     context_section = ""
-    if app_context and app_context.strip() != "":
-        context_section = f"""
-Application Context:
-{app_context}
-"""
+    if app_context and app_context.strip():
+        context_section = f"Application Context:\n{app_context}\n\n"
 
     prompt = f"""
 You are a Senior Agile Business Analyst.
@@ -196,45 +230,36 @@ Requirement:
     return response.choices[0].message.content
 
 # ----------------------------------
-# WORD EXPORT FUNCTION
-# ----------------------------------
-def export_to_word(content):
-    doc = Document()
-    doc.add_heading("AI Generated User Stories", level=1)
-    doc.add_paragraph(content)
-
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
-
-# ----------------------------------
-# GENERATE BUTTON
+# BUTTONS
 # ----------------------------------
 col1, col2 = st.columns(2)
 
-if col1.button("✨ Generate User Stories"):
+if col1.button("✨ Generate"):
     if requirement_text.strip() == "":
-        st.warning("Please enter or upload a requirement.")
+        st.warning("Please enter a requirement.")
     else:
-        with st.spinner("Generating AI Backlog..."):
+        with st.spinner("Generating structured user stories..."):
             st.session_state.generated_story = generate_story(
                 requirement_text,
                 application_context
             )
 
+if col2.button("🔄 Clear"):
+    st.session_state.generated_story = None
+    st.rerun()
+
 # ----------------------------------
-# DISPLAY OUTPUT
+# OUTPUT SECTION
 # ----------------------------------
 if st.session_state.generated_story:
 
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.success("🎉 User Stories Generated Successfully!")
     st.markdown(st.session_state.generated_story)
 
-    # QUALITY SCORE
+    # Quality Score
     score, checks = validate_story(st.session_state.generated_story)
 
-    st.write("---")
     st.subheader("📊 Quality Score")
     st.progress(score / 100)
     st.write(f"Score: {score}/100")
@@ -242,35 +267,17 @@ if st.session_state.generated_story:
     for key, value in checks.items():
         st.write(f"{'✅' if value else '❌'} {key}")
 
-    st.write("---")
+    # Export
+    if st.button("✅ Approve & Download Word File"):
+        doc = Document()
+        doc.add_heading("AI Generated User Stories", level=1)
+        doc.add_paragraph(st.session_state.generated_story)
 
-    col3, col4 = st.columns(2)
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
 
-    # REGENERATE
-    if col3.button("🔄 Regenerate (Improve Quality)"):
-        with st.spinner("Improving user stories..."):
-            improved_prompt = f"""
-Improve the following user stories to make them:
-- More clear
-- More detailed
-- More testable
-- Better structured
-
-{st.session_state.generated_story}
-"""
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": improved_prompt}],
-                temperature=0.3,
-            )
-            st.session_state.generated_story = response.choices[0].message.content
-            st.rerun()
-
-    # APPROVE & DOWNLOAD
-    if col4.button("✅ Approve & Generate Word File"):
-        word_file = export_to_word(st.session_state.generated_story)
-
-        b64 = base64.b64encode(word_file.read()).decode()
+        b64 = base64.b64encode(buffer.read()).decode()
         file_name = f"user_stories_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 
         download_html = f"""
@@ -287,5 +294,8 @@ Improve the following user stories to make them:
         </html>
         """
 
-        st.success("✅ Approved! Download starting...")
+        st.success("Download starting...")
         st.components.v1.html(download_html, height=0)
+
+# Close main card
+st.markdown('</div>', unsafe_allow_html=True)
