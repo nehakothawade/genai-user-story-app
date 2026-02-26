@@ -172,7 +172,7 @@ if st.session_state.generated_story:
 
         st.info(f"🤖 Follow-up Question:\n\n{st.session_state.current_question}")
 
-        user_answer = st.text_area("Your Answer:", height=50)
+        user_answer = st.text_area("Your Answer:", height=20)
 
         col1, col2 = st.columns(2)
 
@@ -190,7 +190,7 @@ User Story:
 Previous Question:
 {st.session_state.current_question}
 
-User Answer:
+Answer:
 {user_answer}
 
 1. Acknowledge briefly.
@@ -250,4 +250,5 @@ Do NOT rewrite the story.
             st.markdown(f"**You Answered:** {chat['answer']}")
             st.markdown(f"**AI Response:** {chat['ai_ack']}")
             st.divider()
+
 
