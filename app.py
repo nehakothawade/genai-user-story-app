@@ -19,7 +19,7 @@ st.set_page_config(
 # GROQ API SETUP
 # ----------------------------------
 try:
-    api_key = st.secrets["GROQ_API_KEY"]
+    api_key = st.secrets["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"]
     client = Groq(api_key=api_key)
 except Exception:
     st.error("⚠ GROQ_API_KEY not found in Streamlit secrets.")
@@ -217,3 +217,4 @@ Improve the following user story to make it:
 
         st.success("Download starting...")
         st.markdown(href, unsafe_allow_html=True)
+
