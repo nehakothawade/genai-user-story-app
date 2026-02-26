@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
-# INIT SESSION STATE SAFELY (IMPORTANT)
+# SAFE SESSION STATE INIT (IMPORTANT)
 # ------------------------------------------------
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
@@ -22,12 +22,12 @@ if "conversation" not in st.session_state:
     st.session_state.conversation = []
 
 # ------------------------------------------------
-# GROQ CLIENT
+# GROQ CLIENT (Use Secrets in Streamlit Cloud)
 # ------------------------------------------------
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ------------------------------------------------
-# BLUE CENTERED UI
+# BLUE CENTERED UI (UNCHANGED STYLE)
 # ------------------------------------------------
 st.markdown("""
 <style>
@@ -194,7 +194,7 @@ Ask ONE clarification question at a time.
 
             st.rerun()
 
-    # DOWNLOAD
+    # DOWNLOAD BUTTON
     if col2.button("⬇ Download & Finish"):
 
         doc = Document()
